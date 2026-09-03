@@ -1,7 +1,10 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
-  content: ["./app/**/*.{js,ts,jsx,tsx,mdx}", "./components/**/*.{js,ts,jsx,tsx,mdx}"],
+  content: [
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./components/**/*.{js,ts,jsx,tsx,mdx}"
+  ],
   theme: {
     extend: {
       colors: {
@@ -17,9 +20,12 @@ const config: Config = {
           950: "#230022"
         }
       },
-      boxShadow: { soft: "0 20px 60px rgba(51,0,51,0.10)" }
+      boxShadow: {
+        soft: "0 20px 60px rgba(51,0,51,0.10)"
+      }
     }
   },
   plugins: []
 };
+
 export default config;

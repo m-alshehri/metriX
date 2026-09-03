@@ -1,15 +1,56 @@
-# metriX — bilingual version
+# metriX — Step 2: Supabase Authentication
 
-English is the default language.
+This version adds real Supabase authentication to the bilingual metriX site.
 
-Routes:
-- `/` → redirects to `/en`
-- `/en` English
-- `/ar` Arabic
-- `/en/login`, `/ar/login`
-- `/en/signup`, `/ar/signup`
+## What works
 
-Arabic uses RTL automatically. English uses LTR.
+- English default route `/en`
+- Arabic route `/ar` with RTL
+- Real signup through Supabase Auth
+- Email confirmation
+- Real login
+- Real logout
+- Protected dashboard
+- User name/email shown in dashboard
 
-Upload the CONTENTS of this folder to the existing GitHub repository, replacing the old files.
-Vercel should redeploy automatically from the same repository.
+## Required Vercel environment variables
+
+These should already exist in Vercel:
+
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+
+Do NOT commit secrets or database passwords to GitHub.
+
+## Supabase URL Configuration
+
+Site URL:
+https://metrix-two-swart.vercel.app
+
+Redirect URL:
+https://metrix-two-swart.vercel.app/**
+
+## Upload
+
+Replace the current repository files with the CONTENTS of this folder.
+Keep package.json at repository root.
+
+After committing to main, Vercel should deploy automatically.
+
+## Test flow
+
+1. Open `/en/signup`
+2. Create a test account
+3. Check your email
+4. Click the confirmation link
+5. You should be taken to `/en/dashboard`
+6. Log out
+7. Log back in via `/en/login`
+
+## Next step
+
+Create database tables for:
+- profiles
+- projects
+- keywords
+- mentions
