@@ -38,7 +38,9 @@ export function buildIntelligence(mentions: IntelMention[], keywords: {id:string
       .replace(/https?:\/\/\S+/g," ")
       .replace(/[^A-Za-z0-9\u0600-\u06FF\s]/g," ")
       .split(/\s+/).filter(w=>w.length>=3 && !stop.has(w));
-    for (const w of new Set(words)) terms.set(w,(terms.get(w)||0)+1);
+    for (const w of Array.from(new Set(words))) {
+      terms.set(w, (terms.get(w) || 0) + 1);
+    }
   }
   const topics = Array.from(terms.entries()).map(([topic,count])=>({topic,count}))
     .sort((a,b)=>b.count-a.count).slice(0,12);
