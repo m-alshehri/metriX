@@ -396,6 +396,11 @@ export default async function ProjectPage({
           </section>
         </div>
 
+        <ProjectAnalytics
+          mentions={ms}
+          keywords={keywords ?? []}
+          locale={locale}
+        />
         <section className="mt-10">
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-black">{t.mentions.title}</h2>
