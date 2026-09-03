@@ -57,17 +57,19 @@ export default function ProjectAnalytics({
       m.author_username?.replace(/^@/, "") ||
       m.author_name ||
       (ar ? "غير معروف" : "Unknown");
+
     const current = authorMap.get(key) || {
       name: key,
       count: 0,
       engagement: 0,
     };
+
     current.count += 1;
     current.engagement += engagement(m);
     authorMap.set(key, current);
   });
 
-  const topAuthors = [...authorMap.values()]
+  const topAuthors = Array.from(authorMap.values())
     .sort(
       (a, b) =>
         b.count - a.count || b.engagement - a.engagement
@@ -88,18 +90,22 @@ export default function ProjectAnalytics({
     .sort((a, b) => b.mentions - a.mentions);
 
   const dayMap = new Map<string, number>();
+
   mentions.forEach((m) => {
     if (!m.published_at) return;
+
     const d = new Date(m.published_at);
     if (Number.isNaN(d.getTime())) return;
+
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
       2,
       "0"
     )}-${String(d.getDate()).padStart(2, "0")}`;
+
     dayMap.set(key, (dayMap.get(key) || 0) + 1);
   });
 
-  const timeline = [...dayMap.entries()]
+  const timeline = Array.from(dayMap.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .slice(-14);
 
@@ -167,6 +173,7 @@ export default function ProjectAnalytics({
                     {row.percent}% · {fmt.format(row.count)}
                   </span>
                 </div>
+
                 <div className="h-3 overflow-hidden rounded-full bg-zinc-100">
                   <div
                     className={`h-full rounded-full ${row.bar}`}
@@ -239,6 +246,7 @@ export default function ProjectAnalytics({
                   </th>
                 </tr>
               </thead>
+
               <tbody>
                 {keywordStats.map((k) => (
                   <tr key={k.id} className="border-b last:border-0">
@@ -271,15 +279,14 @@ export default function ProjectAnalytics({
                 >
                   <div className="min-w-0">
                     <div className="truncate font-black">
-                      {author.name.startsWith("@")
-                        ? author.name
-                        : `@${author.name}`}
+                      @{author.name.replace(/^@/, "")}
                     </div>
                     <div className="mt-1 text-xs text-zinc-400">
                       {fmt.format(author.engagement)}{" "}
                       {ar ? "تفاعل" : "engagement"}
                     </div>
                   </div>
+
                   <div className="rounded-full bg-white px-3 py-1 text-xs font-black">
                     {fmt.format(author.count)}
                   </div>
@@ -307,14 +314,17 @@ export default function ProjectAnalytics({
                   <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-metrix-900">
                     {post.platform}
                   </span>
+
                   <span className="text-xs font-black text-zinc-500">
                     {fmt.format(engagement(post))}{" "}
                     {ar ? "تفاعل" : "engagement"}
                   </span>
                 </div>
+
                 <p className="mt-4 line-clamp-3 text-sm leading-6">
                   {post.content || "—"}
                 </p>
+
                 <div className="mt-4 flex gap-4 text-xs text-zinc-400">
                   <span>♥ {fmt.format(post.likes || 0)}</span>
                   <span>↻ {fmt.format(post.shares || 0)}</span>
