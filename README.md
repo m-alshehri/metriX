@@ -1,56 +1,25 @@
-# metriX — Step 2: Supabase Authentication
+# metriX — Step 3: Projects
 
-This version adds real Supabase authentication to the bilingual metriX site.
+This version adds real Projects stored in Supabase.
 
-## What works
+Required database table:
+public.projects with RLS policies already created.
 
-- English default route `/en`
-- Arabic route `/ar` with RTL
-- Real signup through Supabase Auth
-- Email confirmation
-- Real login
-- Real logout
-- Protected dashboard
-- User name/email shown in dashboard
+What works:
+- Create project
+- Save project to Supabase
+- Each user only sees their own projects due to RLS
+- Project list on dashboard
+- Bilingual EN/AR
+- Existing Supabase Auth remains active
 
-## Required Vercel environment variables
+Upload the CONTENTS of this folder to the existing GitHub repository.
+Vercel should deploy automatically.
 
-These should already exist in Vercel:
-
-NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-
-Do NOT commit secrets or database passwords to GitHub.
-
-## Supabase URL Configuration
-
-Site URL:
-https://metrix-two-swart.vercel.app
-
-Redirect URL:
-https://metrix-two-swart.vercel.app/**
-
-## Upload
-
-Replace the current repository files with the CONTENTS of this folder.
-Keep package.json at repository root.
-
-After committing to main, Vercel should deploy automatically.
-
-## Test flow
-
-1. Open `/en/signup`
-2. Create a test account
-3. Check your email
-4. Click the confirmation link
-5. You should be taken to `/en/dashboard`
-6. Log out
-7. Log back in via `/en/login`
-
-## Next step
-
-Create database tables for:
-- profiles
-- projects
-- keywords
-- mentions
+Test:
+1. Log in.
+2. Open Dashboard.
+3. Click Create project.
+4. Enter project name, e.g. University of Jeddah.
+5. Submit.
+6. Project should appear on the dashboard.

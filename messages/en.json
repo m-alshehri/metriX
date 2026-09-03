@@ -1,94 +1,13 @@
 {
-  "nav": {
-    "features": "Features",
-    "how": "How it works",
-    "insights": "Analytics",
-    "pricing": "Pricing",
-    "login": "Log in",
-    "start": "Get started",
-    "language": "العربية"
-  },
-  "hero": {
-    "badge": "Social Intelligence powered by AI",
-    "title1": "Understand what people say about",
-    "title2": " your brand.",
-    "description": "metriX is a social listening and analytics platform that helps organizations monitor digital conversations, measure engagement, understand sentiment, and discover important trends at the right time.",
-    "start": "Start for free",
-    "explore": "Explore features",
-    "bullet1": "Multi-source monitoring",
-    "bullet2": "Sentiment analysis",
-    "bullet3": "Smart reports"
-  },
-  "dashboardPreview": {
-    "title": "Brand overview",
-    "period": "Last 30 days",
-    "mentions": "Mentions",
-    "engagement": "Engagement",
-    "reach": "Reach",
-    "positive": "Positive sentiment",
-    "timeline": "Mentions over time",
-    "preview": "Live preview"
-  },
-  "features": {
-    "eyebrow": "The Platform",
-    "title": "Everything you need to understand your digital presence",
-    "description": "From monitoring to AI-powered interpretation, metriX brings the key workflows into one clear experience.",
-    "items": [
-      ["Smart Monitoring", "Track keywords, brands, and topics across multiple channels from one place."],
-      ["Mention Analysis", "Bring posts, comments, and engagement into one unified, filterable feed."],
-      ["Artificial Intelligence", "Automatically extract sentiment, topics, summaries, and important patterns."],
-      ["Real-time Analytics", "Monitor volume, reach, engagement, and share of voice in clear dashboards."],
-      ["Alerts", "Detect unusual spikes and potential crises before they escalate."],
-      ["Client Workspaces", "Separate accounts, projects, and permissions for every client or team."]
-    ]
-  },
-  "how": {
-    "steps": [
-      ["Create your project", "Add your brand name, keywords, and topics you want to monitor."],
-      ["Collect mentions", "Connect data sources and start collecting mentions and engagement."],
-      ["Turn data into decisions", "Use metrics, analytics, and AI to surface what matters."]
-    ]
-  },
-  "insights": {
-    "eyebrow": "metriX AI",
-    "title": "Do not just watch the numbers. Understand why they changed.",
-    "description": "Let AI summarize the most important changes, topics, risks, and opportunities instead of reading thousands of mentions manually."
-  },
-  "pricing": {
-    "title": "Start building with metriX",
-    "description": "Create your account and enter the metriX workspace. Projects, real mentions, and analytics are coming next.",
-    "button": "Get started"
-  },
-  "footer": "© 2026 metriX. Social Intelligence Platform.",
-  "auth": {
-    "loginTitle": "Log in",
-    "loginDescription": "Access your metriX workspace.",
-    "signupTitle": "Create account",
-    "signupDescription": "Create your metriX account. We will send you an email to confirm your address.",
-    "name": "Name",
-    "email": "Email address",
-    "password": "Password",
-    "loginButton": "Log in",
-    "signupButton": "Create account",
-    "noAccount": "Don't have an account?",
-    "createAccount": "Create one",
-    "haveAccount": "Already have an account?",
-    "loginLink": "Log in",
-    "checkEmail": "Account created. Check your email and click the confirmation link before logging in.",
-    "invalidLogin": "Email or password is incorrect.",
-    "genericError": "Something went wrong. Please try again."
-  },
-  "dashboard": {
-    "welcome": "Welcome to metriX",
-    "subtitle": "Your social intelligence workspace is ready.",
-    "signedInAs": "Signed in as",
-    "logout": "Log out",
-    "newProject": "Create first project",
-    "emptyTitle": "Your workspace is ready",
-    "emptyText": "In the next step, we will add Projects and Keywords, then start collecting real social media mentions.",
-    "mentions": "Mentions",
-    "reach": "Reach",
-    "engagement": "Engagement",
-    "sentiment": "Positive sentiment"
-  }
+  "nav":{"features":"Features","how":"How it works","insights":"Analytics","pricing":"Pricing","login":"Log in","start":"Get started","language":"العربية"},
+  "hero":{"badge":"Social Intelligence powered by AI","title1":"Understand what people say about","title2":" your brand.","description":"metriX is a social listening and analytics platform that helps organizations monitor digital conversations, measure engagement, understand sentiment, and discover important trends at the right time.","start":"Start for free","explore":"Explore features","bullet1":"Multi-source monitoring","bullet2":"Sentiment analysis","bullet3":"Smart reports"},
+  "dashboardPreview":{"title":"Brand overview","period":"Last 30 days","mentions":"Mentions","engagement":"Engagement","reach":"Reach","positive":"Positive sentiment","timeline":"Mentions over time","preview":"Live preview"},
+  "features":{"eyebrow":"The Platform","title":"Everything you need to understand your digital presence","description":"From monitoring to AI-powered interpretation, metriX brings the key workflows into one clear experience.","items":[["Smart Monitoring","Track keywords, brands, and topics across multiple channels from one place."],["Mention Analysis","Bring posts, comments, and engagement into one unified, filterable feed."],["Artificial Intelligence","Automatically extract sentiment, topics, summaries, and important patterns."],["Real-time Analytics","Monitor volume, reach, engagement, and share of voice in clear dashboards."],["Alerts","Detect unusual spikes and potential crises before they escalate."],["Client Workspaces","Separate accounts, projects, and permissions for every client or team."]]},
+  "how":{"steps":[["Create your project","Add your brand name, keywords, and topics you want to monitor."],["Collect mentions","Connect data sources and start collecting mentions and engagement."],["Turn data into decisions","Use metrics, analytics, and AI to surface what matters."]]},
+  "insights":{"eyebrow":"metriX AI","title":"Do not just watch the numbers. Understand why they changed.","description":"Let AI summarize the most important changes, topics, risks, and opportunities instead of reading thousands of mentions manually."},
+  "pricing":{"title":"Start building with metriX","description":"Create your account and enter the metriX workspace. Projects, real mentions, and analytics are coming next.","button":"Get started"},
+  "footer":"© 2026 metriX. Social Intelligence Platform.",
+  "auth":{"loginTitle":"Log in","loginDescription":"Access your metriX workspace.","signupTitle":"Create account","signupDescription":"Create your metriX account. We will send you an email to confirm your address.","name":"Name","email":"Email address","password":"Password","loginButton":"Log in","signupButton":"Create account","noAccount":"Don't have an account?","createAccount":"Create one","haveAccount":"Already have an account?","loginLink":"Log in","checkEmail":"Account created. Check your email and click the confirmation link before logging in.","invalidLogin":"Email or password is incorrect.","genericError":"Something went wrong. Please try again."},
+  "dashboard":{"welcome":"Welcome to metriX","subtitle":"Your social intelligence workspace is ready.","signedInAs":"Signed in as","logout":"Log out","newProject":"Create project","projectsTitle":"Your projects","projectsEmpty":"You have not created any projects yet.","mentions":"Mentions","reach":"Reach","engagement":"Engagement","sentiment":"Positive sentiment"},
+  "projects":{"newTitle":"Create a new project","newDescription":"Start by naming the brand, organization, or topic you want to monitor.","name":"Project name","description":"Description (optional)","submit":"Create project","cancel":"Cancel","created":"Project created successfully.","error":"Could not create the project. Please try again."}
 }
