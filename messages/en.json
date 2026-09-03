@@ -173,5 +173,18 @@
     "error402": "X returned 402. Your API account may not have enough credits or access for this request.",
     "error403": "X returned 403. Your X API project does not currently have permission to use Recent Search.",
     "error429": "X rate limit reached (429). Wait before syncing again."
+  },
+  "ai": {
+    "button": "Analyze Sentiment",
+    "pending": "{count} mentions pending sentiment analysis",
+    "pendingLabel": "Pending analysis",
+    "complete": "AI sentiment analysis complete: {analyzed} mentions analyzed.",
+    "nothingPending": "There are no mentions waiting for sentiment analysis.",
+    "missingKey": "OPENAI_API_KEY is not configured in Vercel.",
+    "databaseError": "Could not load pending mentions from the database.",
+    "error401": "OpenAI rejected the API key (401). Check your OPENAI_API_KEY.",
+    "error429": "OpenAI rate limit or quota reached (429). Check billing/usage and try again.",
+    "apiError": "OpenAI returned an API error. Try again or check Vercel logs.",
+    "parseError": "The AI response could not be parsed. Try again."
   }
 }
