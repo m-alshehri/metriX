@@ -11,6 +11,7 @@ import { syncFromX } from "../x-actions";
 import { analyzeSentiment } from "../ai-actions";
 import MetricCard from "@/components/MetricCard";
 import ProjectAnalytics from "@/components/ProjectAnalytics";
+import ProjectAIInsights from "@/components/ProjectAIInsights";
 
 export default async function ProjectPage({
   params,
@@ -28,6 +29,10 @@ export default async function ProjectPage({
     aimessage?: string;
     aierror?: string;
     analyzed?: string;
+
+    insights?: string;
+    insighterror?: string;
+    code?: string;
   };
 }) {
   if (!isLocale(params.locale)) notFound();
@@ -400,6 +405,11 @@ export default async function ProjectPage({
           mentions={ms}
           keywords={keywords ?? []}
           locale={locale}
+        />
+        <ProjectAIInsights
+          projectId={id}
+          locale={locale}
+          searchParams={searchParams}
         />
         <section className="mt-10">
           <div className="flex items-center justify-between">
