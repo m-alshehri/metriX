@@ -141,7 +141,7 @@
   "mentions": {
     "title": "Mentions",
     "addTitle": "Add test mention",
-    "description": "Use this temporary form to verify the analytics pipeline before connecting X and other APIs.",
+    "description": "Use this temporary form to verify the analytics pipeline before connecting APIs.",
     "platform": "Platform",
     "keyword": "Keyword",
     "author": "Author name",
@@ -163,5 +163,15 @@
     "negative": "Negative",
     "engagement": "Engagement",
     "viewPost": "View post"
+  },
+  "xsync": {
+    "button": "Sync from X",
+    "complete": "X sync complete: {imported} new posts imported, {duplicates} duplicates skipped, {failures} keyword searches failed.",
+    "missingToken": "X_BEARER_TOKEN is not configured in Vercel.",
+    "noKeywords": "Add at least one keyword before syncing from X.",
+    "error401": "X rejected the Bearer Token (401). Check that the token is valid.",
+    "error402": "X returned 402. Your API account may not have enough credits or access for this request.",
+    "error403": "X returned 403. Your X API project does not currently have permission to use Recent Search.",
+    "error429": "X rate limit reached (429). Wait before syncing again."
   }
 }
