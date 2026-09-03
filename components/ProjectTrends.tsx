@@ -32,8 +32,8 @@ function extractTerms(mentions: Mention[]) {
     if (!m.content) return;
     const cleaned = m.content
       .replace(/https?:\/\/\S+/gi, " ")
-      .replace(/[@#][\p{L}\p{N}_]+/gu, " ")
-      .replace(/[^\p{L}\p{N}\s]/gu, " ")
+      .replace(/[@#][A-Za-z0-9_\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]+/g, " ")
+      .replace(/[^A-Za-z0-9\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\s]/g, " ")
       .toLowerCase();
     const unique = new Set(
       cleaned.split(/\s+/).map((x) => x.trim())
