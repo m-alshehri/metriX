@@ -1,25 +1,29 @@
-# metriX — Step 3: Projects
+# metriX — Step 4: Keywords
 
-This version adds real Projects stored in Supabase.
-
-Required database table:
-public.projects with RLS policies already created.
+Adds project detail pages and real keyword management.
 
 What works:
-- Create project
-- Save project to Supabase
-- Each user only sees their own projects due to RLS
-- Project list on dashboard
-- Bilingual EN/AR
-- Existing Supabase Auth remains active
+- Click a project from the dashboard.
+- Open project page.
+- Add keywords to that project.
+- Duplicate keyword protection.
+- Delete keywords.
+- Keywords stored in Supabase.
+- RLS ensures users only access their own data.
+- English and Arabic supported.
 
 Upload the CONTENTS of this folder to the existing GitHub repository.
 Vercel should deploy automatically.
 
 Test:
 1. Log in.
-2. Open Dashboard.
-3. Click Create project.
-4. Enter project name, e.g. University of Jeddah.
-5. Submit.
-6. Project should appear on the dashboard.
+2. Open University of Jeddah.
+3. Add:
+   جامعة جدة
+   University of Jeddah
+   UJ
+   #جامعة_جدة
+4. Confirm they appear.
+5. Delete one and confirm it disappears.
+
+Next step: mentions table + importing social media data.
