@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: #fffdfd;
+  color: #201820;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+::selection {
+  background: #330033;
+  color: white;
+}
