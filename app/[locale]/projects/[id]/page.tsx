@@ -10,6 +10,7 @@ import {
 import { syncFromX } from "../x-actions";
 import { analyzeSentiment } from "../ai-actions";
 import MetricCard from "@/components/MetricCard";
+import ProjectAnalytics from "@/components/ProjectAnalytics";
 
 export default async function ProjectPage({
   params,
