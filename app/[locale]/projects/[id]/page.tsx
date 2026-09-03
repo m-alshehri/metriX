@@ -407,7 +407,7 @@ export default async function ProjectPage({
           locale={locale}
         />
         <ProjectAIInsights
-          projectId={id}
+          projectId={params.id}
           locale={locale}
           searchParams={searchParams}
         />
