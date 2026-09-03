@@ -13,6 +13,7 @@ import MetricCard from "@/components/MetricCard";
 import ProjectAnalytics from "@/components/ProjectAnalytics";
 import ProjectAIInsights from "@/components/ProjectAIInsights";
 import ProjectTrends from "@/components/ProjectTrends";
+import MegaIntelligence from "@/components/MegaIntelligence";
 
 export default async function ProjectPage({
   params,
@@ -415,6 +416,10 @@ export default async function ProjectPage({
         <ProjectTrends
           mentions={ms}
           keywords={keywords ?? []}
+          locale={locale}
+        />
+        <MegaIntelligence
+          projectId={params.id}
           locale={locale}
         />
         <section className="mt-10">
