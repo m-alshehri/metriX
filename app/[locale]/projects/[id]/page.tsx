@@ -15,6 +15,7 @@ import ProjectAIInsights from "@/components/ProjectAIInsights";
 import ProjectTrends from "@/components/ProjectTrends";
 import MegaIntelligence from "@/components/MegaIntelligence";
 import AlertSettings from "@/components/AlertSettings";
+import AlertsCenter from "@/components/AlertsCenter";
 
 export default async function ProjectPage({
   params,
@@ -428,6 +429,10 @@ export default async function ProjectPage({
           projectId={params.id}
           locale={locale}
           status={searchParams?.settings}
+        />
+        <AlertsCenter
+          projectId={params.id}
+          locale={locale}
         />
         <section className="mt-10">
           <div className="flex items-center justify-between">
