@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { buildIntelligence } from "@/lib/intelligence";
 import { runFullPipeline } from "@/app/[locale]/projects/pipeline-actions";
+import { sendTestAlertEmail } from "@/app/[locale]/projects/email-actions";
 
 export default async function MegaIntelligence({
   projectId,
@@ -12,30 +13,38 @@ export default async function MegaIntelligence({
   const ar = locale === "ar";
   const db = createClient();
 
-  const [{ data: mentions }, { data: keywords }, { data: lastRun }] =
-    await Promise.all([
-      db
-        .from("mentions")
-        .select(
-          "keyword_id,author_username,author_name,content,sentiment,likes,shares,replies,views"
-        )
-        .eq("project_id", projectId),
+  const [
+    { data: mentions },
+    { data: keywords },
+    { data: lastRun },
+    { data: settings },
+  ] = await Promise.all([
+    db
+      .from("mentions")
+      .select(
+        "keyword_id,author_username,author_name,content,sentiment,likes,shares,replies,views"
+      )
+      .eq("project_id", projectId),
 
-      db
-        .from("keywords")
-        .select("id,keyword")
-        .eq("project_id", projectId),
+    db
+      .from("keywords")
+      .select("id,keyword")
+      .eq("project_id", projectId),
 
-      db
-        .from("pipeline_runs")
-        .select(
-          "status,imported,analyzed,alerts,started_at,finished_at,details"
-        )
-        .eq("project_id", projectId)
-        .order("started_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-    ]);
+    db
+      .from("pipeline_runs")
+      .select("status,imported,analyzed,alerts,started_at,finished_at,details")
+      .eq("project_id", projectId)
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+
+    db
+      .from("project_settings")
+      .select("email_alerts_enabled,alert_email")
+      .eq("project_id", projectId)
+      .maybeSingle(),
+  ]);
 
   const intel = buildIntelligence(mentions || [], keywords || []);
 
@@ -46,16 +55,12 @@ export default async function MegaIntelligence({
         : `Last successful run: ${lastRun.imported} imported · ${lastRun.analyzed} analyzed · ${lastRun.alerts} alerts`
       : lastRun?.status === "failed"
       ? ar
-        ? "آخر تشغيل فشل. راجع سجلات Vercel لمعرفة السبب."
-        : "The last pipeline run failed. Check Vercel logs for details."
+        ? "آخر تشغيل فشل. راجع سجلات Vercel."
+        : "The last pipeline run failed. Check Vercel logs."
       : lastRun?.status === "running"
       ? ar
         ? "الـPipeline قيد التشغيل."
         : "The pipeline is currently running."
-      : lastRun
-      ? ar
-        ? `آخر حالة: ${lastRun.status}`
-        : `Last status: ${lastRun.status}`
       : ar
       ? "لم يتم تشغيل الـPipeline الكامل بعد."
       : "The full pipeline has not been run yet.";
@@ -68,34 +73,49 @@ export default async function MegaIntelligence({
             <div className="text-xs font-black uppercase tracking-[0.2em] text-metrix-700">
               {ar ? "الأتمتة" : "AUTOMATION"}
             </div>
+
             <h2 className="mt-2 text-2xl font-black">
               {ar ? "تشغيل الـPipeline الكامل" : "Run Full Pipeline"}
             </h2>
+
             <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500">
               {ar
                 ? "يجمع أحدث المنشورات من X، يحلل المشاعر، يحدث AI Insights، ثم يفحص التنبيهات."
                 : "Collects new X posts, analyzes sentiment, refreshes AI Insights, then scans for alerts."}
             </p>
-            <p
-              className={`mt-3 text-sm font-bold ${
-                lastRun?.status === "failed"
-                  ? "text-red-600"
-                  : lastRun?.status === "success"
-                  ? "text-emerald-700"
-                  : "text-zinc-600"
-              }`}
-            >
+
+            <p className="mt-3 text-sm font-bold text-zinc-700">
               {lastRunLabel}
+            </p>
+
+            <p className="mt-2 text-sm text-zinc-500">
+              {settings?.email_alerts_enabled && settings?.alert_email
+                ? ar
+                  ? `تنبيهات البريد مفعلة إلى ${settings.alert_email}`
+                  : `Email alerts enabled for ${settings.alert_email}`
+                : ar
+                ? "تنبيهات البريد غير مفعلة."
+                : "Email alerts are disabled."}
             </p>
           </div>
 
-          <form action={runFullPipeline}>
-            <input type="hidden" name="locale" value={locale} />
-            <input type="hidden" name="project_id" value={projectId} />
-            <button className="rounded-full bg-metrix-900 px-6 py-3 font-black text-white transition hover:opacity-90">
-              {ar ? "تشغيل كامل الآن" : "Run Full Pipeline"}
-            </button>
-          </form>
+          <div className="flex flex-wrap gap-3">
+            <form action={runFullPipeline}>
+              <input type="hidden" name="locale" value={locale} />
+              <input type="hidden" name="project_id" value={projectId} />
+              <button className="rounded-full bg-metrix-900 px-6 py-3 font-black text-white">
+                {ar ? "تشغيل كامل الآن" : "Run Full Pipeline"}
+              </button>
+            </form>
+
+            <form action={sendTestAlertEmail}>
+              <input type="hidden" name="locale" value={locale} />
+              <input type="hidden" name="project_id" value={projectId} />
+              <button className="rounded-full border border-metrix-900 px-6 py-3 font-black text-metrix-900">
+                {ar ? "إرسال بريد تجريبي" : "Send Test Email"}
+              </button>
+            </form>
+          </div>
         </div>
       </div>
 
@@ -104,15 +124,12 @@ export default async function MegaIntelligence({
       </div>
 
       <h2 className="mt-2 text-3xl font-black">
-        {ar
-          ? "حصة الصوت والمواضيع والمؤثرون"
-          : "Share of Voice, Topics & Influencers"}
+        {ar ? "حصة الصوت والمواضيع والمؤثرون" : "Share of Voice, Topics & Influencers"}
       </h2>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <div className="rounded-[2rem] border bg-white p-6 shadow-sm">
           <h3 className="font-black">{ar ? "حصة الصوت" : "Share of Voice"}</h3>
-
           <div className="mt-4 space-y-3">
             {intel.shareOfVoice.map((x) => (
               <div key={x.keyword}>
@@ -120,12 +137,8 @@ export default async function MegaIntelligence({
                   <b>{x.keyword}</b>
                   <span>{x.percent}%</span>
                 </div>
-
                 <div className="mt-1 h-2 rounded bg-zinc-100">
-                  <div
-                    className="h-2 rounded bg-metrix-900"
-                    style={{ width: `${x.percent}%` }}
-                  />
+                  <div className="h-2 rounded bg-metrix-900" style={{ width: `${x.percent}%` }} />
                 </div>
               </div>
             ))}
@@ -133,16 +146,10 @@ export default async function MegaIntelligence({
         </div>
 
         <div className="rounded-[2rem] border bg-white p-6 shadow-sm">
-          <h3 className="font-black">
-            {ar ? "المواضيع البارزة" : "Topic signals"}
-          </h3>
-
+          <h3 className="font-black">{ar ? "المواضيع البارزة" : "Topic signals"}</h3>
           <div className="mt-4 flex flex-wrap gap-2">
             {intel.topics.map((x) => (
-              <span
-                key={x.topic}
-                className="rounded-full bg-metrix-50 px-3 py-2 text-sm font-bold"
-              >
+              <span key={x.topic} className="rounded-full bg-metrix-50 px-3 py-2 text-sm font-bold">
                 {x.topic} · {x.count}
               </span>
             ))}
@@ -150,20 +157,12 @@ export default async function MegaIntelligence({
         </div>
 
         <div className="rounded-[2rem] border bg-white p-6 shadow-sm">
-          <h3 className="font-black">
-            {ar ? "أهم المؤلفين" : "Top authors"}
-          </h3>
-
+          <h3 className="font-black">{ar ? "أهم المؤلفين" : "Top authors"}</h3>
           <div className="mt-4 space-y-3">
             {intel.topAuthors.slice(0, 7).map((x) => (
-              <div
-                key={x.name}
-                className="flex justify-between border-b pb-2 text-sm"
-              >
+              <div key={x.name} className="flex justify-between border-b pb-2 text-sm">
                 <b>{x.name}</b>
-                <span>
-                  {x.engagement} {ar ? "تفاعل" : "eng."}
-                </span>
+                <span>{x.engagement} {ar ? "تفاعل" : "eng."}</span>
               </div>
             ))}
           </div>
