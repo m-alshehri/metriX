@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase-admin";
 
 type XPost = { id:string;text?:string;author_id?:string;created_at?:string;lang?:string;public_metrics?:{like_count?:number;reply_count?:number;repost_count?:number;quote_count?:number;impression_count?:number} };
 type XUser = {id:string;name?:string;username?:string};
+
 function query(keyword:string) {
   const clean=keyword.trim().replace(/"/g,'\\"');
   return `${clean.includes(" ") && !clean.startsWith("#") ? `"${clean}"` : clean} -is:retweet`;
@@ -25,37 +26,33 @@ async function openAI(input:string, schema:any) {
 
 async function collectYouTube(db:any, projectId:string, userId:string, keywords:any[]) {
   const key=process.env.YOUTUBE_API_KEY;
-  if(!key) return 0;
-  let imported=0;
+  if(!key) return {videos:0,comments:0};
 
-  for (const k of keywords || []) {
-    const searchParams=new URLSearchParams({
-      part:"snippet", type:"video", q:k.keyword, maxResults:"10", order:"date", key
+  let videos=0, comments=0;
+  const processedVideoComments=new Set<string>();
+
+  for(const k of keywords||[]) {
+    const sp=new URLSearchParams({
+      part:"snippet",type:"video",q:k.keyword,maxResults:"10",order:"date",key
     });
-    const sr=await fetch(`https://www.googleapis.com/youtube/v3/search?${searchParams}`,{cache:"no-store"});
-    if(!sr.ok) {
-      console.error("YouTube search failed", sr.status, await sr.text());
-      continue;
-    }
+    const sr=await fetch(`https://www.googleapis.com/youtube/v3/search?${sp}`,{cache:"no-store"});
+    if(!sr.ok){console.error("YouTube search failed",sr.status,await sr.text());continue;}
     const sj=await sr.json();
-    const items=(sj.items||[]).filter((x:any)=>x?.id?.videoId);
-    if(!items.length) continue;
+    const searchItems=(sj.items||[]).filter((x:any)=>x?.id?.videoId);
+    if(!searchItems.length) continue;
 
-    const ids=items.map((x:any)=>x.id.videoId).join(",");
-    const videoParams=new URLSearchParams({part:"snippet,statistics",id:ids,key});
-    const vr=await fetch(`https://www.googleapis.com/youtube/v3/videos?${videoParams}`,{cache:"no-store"});
-    if(!vr.ok) {
-      console.error("YouTube video details failed", vr.status, await vr.text());
-      continue;
-    }
+    const ids=searchItems.map((x:any)=>x.id.videoId).join(",");
+    const vp=new URLSearchParams({part:"snippet,statistics",id:ids,key});
+    const vr=await fetch(`https://www.googleapis.com/youtube/v3/videos?${vp}`,{cache:"no-store"});
+    if(!vr.ok){console.error("YouTube videos failed",vr.status,await vr.text());continue;}
     const vj=await vr.json();
 
-    for (const v of vj.items || []) {
+    for(const v of vj.items||[]) {
       const s=v.snippet||{}, st=v.statistics||{};
       const content=[s.title,s.description].filter(Boolean).join("\n\n");
       const {error}=await db.from("mentions").insert({
         user_id:userId,project_id:projectId,keyword_id:k.id,platform:"YouTube",
-        external_id:v.id,author_name:s.channelTitle||null,author_username:s.channelId||null,
+        external_id:`video:${v.id}`,author_name:s.channelTitle||null,author_username:s.channelId||null,
         content:content||null,post_url:`https://www.youtube.com/watch?v=${v.id}`,
         published_at:s.publishedAt||new Date().toISOString(),
         likes:Number(st.likeCount||0),shares:0,replies:Number(st.commentCount||0),
@@ -63,12 +60,48 @@ async function collectYouTube(db:any, projectId:string, userId:string, keywords:
         language:s.defaultLanguage||s.defaultAudioLanguage||null
       });
       if(!error){
-        imported++;
-        await db.from("usage_events").insert({user_id:userId,project_id:projectId,event_type:"mention_imported"});
+        videos++;
+        await db.from("usage_events").insert({user_id:userId,project_id:projectId,event_type:"mention_imported",metadata:{platform:"YouTube",type:"video"}});
+      }
+
+      if(processedVideoComments.has(v.id)) continue;
+      processedVideoComments.add(v.id);
+
+      const cp=new URLSearchParams({
+        part:"snippet",videoId:v.id,maxResults:"20",order:"time",textFormat:"plainText",key
+      });
+      const cr=await fetch(`https://www.googleapis.com/youtube/v3/commentThreads?${cp}`,{cache:"no-store"});
+      if(!cr.ok){
+        const body=await cr.text();
+        if(cr.status!==403) console.error("YouTube comments failed",cr.status,body);
+        continue;
+      }
+      const cj=await cr.json();
+
+      for(const thread of cj.items||[]) {
+        const c=thread?.snippet?.topLevelComment;
+        const cs=c?.snippet;
+        if(!c?.id || !cs?.textDisplay) continue;
+
+        const {error:commentError}=await db.from("mentions").insert({
+          user_id:userId,project_id:projectId,keyword_id:k.id,platform:"YouTube",
+          external_id:`comment:${c.id}`,
+          author_name:cs.authorDisplayName||null,
+          author_username:cs.authorChannelId?.value||null,
+          content:cs.textDisplay,
+          post_url:`https://www.youtube.com/watch?v=${v.id}&lc=${encodeURIComponent(c.id)}`,
+          published_at:cs.publishedAt||new Date().toISOString(),
+          likes:Number(cs.likeCount||0),shares:0,replies:Number(thread?.snippet?.totalReplyCount||0),
+          views:0,sentiment:null,language:null
+        });
+        if(!commentError){
+          comments++;
+          await db.from("usage_events").insert({user_id:userId,project_id:projectId,event_type:"mention_imported",metadata:{platform:"YouTube",type:"comment",video_id:v.id}});
+        }
       }
     }
   }
-  return imported;
+  return {videos,comments};
 }
 
 export async function runProjectPipeline(projectId:string,userId:string) {
@@ -77,6 +110,7 @@ export async function runProjectPipeline(projectId:string,userId:string) {
   let imported=0, analyzed=0, alerts=0;
   try {
     const {data:keywords}=await db.from("keywords").select("id,keyword").eq("project_id",projectId);
+
     const token=process.env.X_BEARER_TOKEN;
     if(token) for(const k of keywords||[]) {
       const p=new URLSearchParams({query:query(k.keyword),max_results:"10","post.fields":"created_at,lang,public_metrics,author_id",expansions:"author_id","user.fields":"name,username"});
@@ -86,11 +120,12 @@ export async function runProjectPipeline(projectId:string,userId:string) {
       for(const post of (j.data||[]) as XPost[]) {
         const u=post.author_id?users.get(post.author_id):undefined, m=post.public_metrics||{}, username=u?.username||null;
         const {error}=await db.from("mentions").insert({user_id:userId,project_id:projectId,keyword_id:k.id,platform:"X",external_id:post.id,author_name:u?.name||null,author_username:username,content:post.text||null,post_url:username?`https://x.com/${username}/status/${post.id}`:`https://x.com/i/web/status/${post.id}`,published_at:post.created_at||new Date().toISOString(),likes:m.like_count||0,shares:(m.repost_count||0)+(m.quote_count||0),replies:m.reply_count||0,views:m.impression_count||0,sentiment:null,language:post.lang||null});
-        if(!error){imported++; await db.from("usage_events").insert({user_id:userId,project_id:projectId,event_type:"mention_imported"});}
+        if(!error){imported++; await db.from("usage_events").insert({user_id:userId,project_id:projectId,event_type:"mention_imported",metadata:{platform:"X"}});}
       }
     }
 
-    imported += await collectYouTube(db,projectId,userId,keywords||[]);
+    const yt=await collectYouTube(db,projectId,userId,keywords||[]);
+    imported += yt.videos + yt.comments;
 
     const {data:pending}=await db.from("mentions").select("id,content").eq("project_id",projectId).is("sentiment",null).not("content","is",null).limit(50);
     if(pending?.length) {
@@ -99,16 +134,19 @@ export async function runProjectPipeline(projectId:string,userId:string) {
       });
       for(const x of result.items||[]) { const {error}=await db.from("mentions").update({sentiment:x.sentiment}).eq("id",x.id).eq("project_id",projectId); if(!error) analyzed++; }
     }
+
     const {data:ms}=await db.from("mentions").select("id,keyword_id,content,published_at,likes,shares,replies,views,sentiment,language").eq("project_id",projectId).order("published_at",{ascending:false}).limit(100);
     const rows=ms||[], analyzedRows=rows.filter((m:any)=>["positive","neutral","negative"].includes(m.sentiment)), neg=analyzedRows.filter((m:any)=>m.sentiment==="negative").length;
     const {data:settings}=await db.from("project_settings").select("*").eq("project_id",projectId).maybeSingle();
     const threshold=settings?.negative_threshold||40;
+
     await db.from("project_alerts").update({is_active:false}).eq("project_id",projectId).eq("is_active",true);
     if(analyzedRows.length>=5 && neg/analyzedRows.length*100>=threshold) {
       const pct=Math.round(neg/analyzedRows.length*100); const severity=pct>=70?"critical":pct>=55?"high":"medium";
       const inserted=(await db.from("project_alerts").insert({user_id:userId,project_id:projectId,alert_type:"negative_sentiment",severity,title:"Elevated negative sentiment",description:`Negative mentions are ${pct}% of analyzed mentions.`,metadata:{percent:pct},is_active:true}).select("id,severity,title,description").single()).data;
       if(inserted){alerts++; if(["high","critical"].includes(inserted.severity) && settings?.email_alerts_enabled && settings?.alert_email) await sendAlert(settings.alert_email,inserted.title,inserted.description,inserted.id);}
     }
+
     if(rows.length>=3) {
       const insights=await openAI(`You are metriX social intelligence. Using only supplied mentions, return concise evidence-grounded project intelligence. Do not invent causes or facts. Mentions:\n${JSON.stringify(rows.map((m:any)=>({content:(m.content||"").slice(0,1000),sentiment:m.sentiment,engagement:(m.likes||0)+(m.shares||0)+(m.replies||0),language:m.language})))}`,{
         type:"object",additionalProperties:false,required:["executive_summary","top_topics","positive_drivers","negative_drivers","risks","opportunities","recommendations"],properties:{
@@ -117,13 +155,19 @@ export async function runProjectPipeline(projectId:string,userId:string) {
       });
       await db.from("project_insights").insert({user_id:userId,project_id:projectId,...insights,mentions_analyzed:rows.length});
     }
-    if(run?.id) await db.from("pipeline_runs").update({status:"success",imported,analyzed,alerts,finished_at:new Date().toISOString(),details:{sources:["X","YouTube"]}}).eq("id",run.id);
+
+    if(run?.id) await db.from("pipeline_runs").update({
+      status:"success",imported,analyzed,alerts,finished_at:new Date().toISOString(),
+      details:{sources:["X","YouTube"],youtube_videos:yt.videos,youtube_comments:yt.comments}
+    }).eq("id",run.id);
+
     return {imported,analyzed,alerts};
   } catch(e:any) {
     if(run?.id) await db.from("pipeline_runs").update({status:"failed",imported,analyzed,alerts,details:{error:String(e?.message||e)},finished_at:new Date().toISOString()}).eq("id",run.id);
     throw e;
   }
 }
+
 async function sendAlert(to:string,title:string,description:string,id:string) {
   const key=process.env.RESEND_API_KEY, from=process.env.ALERT_FROM_EMAIL;
   if(!key||!from) return;
