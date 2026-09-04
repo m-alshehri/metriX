@@ -3,7 +3,6 @@ import { createAdminClient } from "@/lib/supabase-admin";
 
 type XPost = { id:string;text?:string;author_id?:string;created_at?:string;lang?:string;public_metrics?:{like_count?:number;reply_count?:number;repost_count?:number;quote_count?:number;impression_count?:number} };
 type XUser = {id:string;name?:string;username?:string};
-
 function query(keyword:string) {
   const clean=keyword.trim().replace(/"/g,'\\"');
   return `${clean.includes(" ") && !clean.startsWith("#") ? `"${clean}"` : clean} -is:retweet`;
@@ -23,6 +22,55 @@ async function openAI(input:string, schema:any) {
   if(!r.ok) throw new Error(`OpenAI ${r.status}`);
   return JSON.parse(extractText(await r.json()));
 }
+
+async function collectYouTube(db:any, projectId:string, userId:string, keywords:any[]) {
+  const key=process.env.YOUTUBE_API_KEY;
+  if(!key) return 0;
+  let imported=0;
+
+  for (const k of keywords || []) {
+    const searchParams=new URLSearchParams({
+      part:"snippet", type:"video", q:k.keyword, maxResults:"10", order:"date", key
+    });
+    const sr=await fetch(`https://www.googleapis.com/youtube/v3/search?${searchParams}`,{cache:"no-store"});
+    if(!sr.ok) {
+      console.error("YouTube search failed", sr.status, await sr.text());
+      continue;
+    }
+    const sj=await sr.json();
+    const items=(sj.items||[]).filter((x:any)=>x?.id?.videoId);
+    if(!items.length) continue;
+
+    const ids=items.map((x:any)=>x.id.videoId).join(",");
+    const videoParams=new URLSearchParams({part:"snippet,statistics",id:ids,key});
+    const vr=await fetch(`https://www.googleapis.com/youtube/v3/videos?${videoParams}`,{cache:"no-store"});
+    if(!vr.ok) {
+      console.error("YouTube video details failed", vr.status, await vr.text());
+      continue;
+    }
+    const vj=await vr.json();
+
+    for (const v of vj.items || []) {
+      const s=v.snippet||{}, st=v.statistics||{};
+      const content=[s.title,s.description].filter(Boolean).join("\n\n");
+      const {error}=await db.from("mentions").insert({
+        user_id:userId,project_id:projectId,keyword_id:k.id,platform:"YouTube",
+        external_id:v.id,author_name:s.channelTitle||null,author_username:s.channelId||null,
+        content:content||null,post_url:`https://www.youtube.com/watch?v=${v.id}`,
+        published_at:s.publishedAt||new Date().toISOString(),
+        likes:Number(st.likeCount||0),shares:0,replies:Number(st.commentCount||0),
+        views:Number(st.viewCount||0),sentiment:null,
+        language:s.defaultLanguage||s.defaultAudioLanguage||null
+      });
+      if(!error){
+        imported++;
+        await db.from("usage_events").insert({user_id:userId,project_id:projectId,event_type:"mention_imported"});
+      }
+    }
+  }
+  return imported;
+}
+
 export async function runProjectPipeline(projectId:string,userId:string) {
   const db=createAdminClient();
   const run=(await db.from("pipeline_runs").insert({project_id:projectId,user_id:userId,status:"running"}).select("id").single()).data;
@@ -42,6 +90,8 @@ export async function runProjectPipeline(projectId:string,userId:string) {
       }
     }
 
+    imported += await collectYouTube(db,projectId,userId,keywords||[]);
+
     const {data:pending}=await db.from("mentions").select("id,content").eq("project_id",projectId).is("sentiment",null).not("content","is",null).limit(50);
     if(pending?.length) {
       const result=await openAI(`Classify sentiment as positive, neutral, or negative. Handle Arabic, Saudi/Gulf dialect, English, code-switching and sarcasm. Return one item per id.\n${JSON.stringify(pending)}`,{
@@ -49,7 +99,6 @@ export async function runProjectPipeline(projectId:string,userId:string) {
       });
       for(const x of result.items||[]) { const {error}=await db.from("mentions").update({sentiment:x.sentiment}).eq("id",x.id).eq("project_id",projectId); if(!error) analyzed++; }
     }
-
     const {data:ms}=await db.from("mentions").select("id,keyword_id,content,published_at,likes,shares,replies,views,sentiment,language").eq("project_id",projectId).order("published_at",{ascending:false}).limit(100);
     const rows=ms||[], analyzedRows=rows.filter((m:any)=>["positive","neutral","negative"].includes(m.sentiment)), neg=analyzedRows.filter((m:any)=>m.sentiment==="negative").length;
     const {data:settings}=await db.from("project_settings").select("*").eq("project_id",projectId).maybeSingle();
@@ -60,7 +109,6 @@ export async function runProjectPipeline(projectId:string,userId:string) {
       const inserted=(await db.from("project_alerts").insert({user_id:userId,project_id:projectId,alert_type:"negative_sentiment",severity,title:"Elevated negative sentiment",description:`Negative mentions are ${pct}% of analyzed mentions.`,metadata:{percent:pct},is_active:true}).select("id,severity,title,description").single()).data;
       if(inserted){alerts++; if(["high","critical"].includes(inserted.severity) && settings?.email_alerts_enabled && settings?.alert_email) await sendAlert(settings.alert_email,inserted.title,inserted.description,inserted.id);}
     }
-
     if(rows.length>=3) {
       const insights=await openAI(`You are metriX social intelligence. Using only supplied mentions, return concise evidence-grounded project intelligence. Do not invent causes or facts. Mentions:\n${JSON.stringify(rows.map((m:any)=>({content:(m.content||"").slice(0,1000),sentiment:m.sentiment,engagement:(m.likes||0)+(m.shares||0)+(m.replies||0),language:m.language})))}`,{
         type:"object",additionalProperties:false,required:["executive_summary","top_topics","positive_drivers","negative_drivers","risks","opportunities","recommendations"],properties:{
@@ -69,8 +117,7 @@ export async function runProjectPipeline(projectId:string,userId:string) {
       });
       await db.from("project_insights").insert({user_id:userId,project_id:projectId,...insights,mentions_analyzed:rows.length});
     }
-
-    if(run?.id) await db.from("pipeline_runs").update({status:"success",imported,analyzed,alerts,finished_at:new Date().toISOString()}).eq("id",run.id);
+    if(run?.id) await db.from("pipeline_runs").update({status:"success",imported,analyzed,alerts,finished_at:new Date().toISOString(),details:{sources:["X","YouTube"]}}).eq("id",run.id);
     return {imported,analyzed,alerts};
   } catch(e:any) {
     if(run?.id) await db.from("pipeline_runs").update({status:"failed",imported,analyzed,alerts,details:{error:String(e?.message||e)},finished_at:new Date().toISOString()}).eq("id",run.id);
