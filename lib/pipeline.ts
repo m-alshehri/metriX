@@ -434,8 +434,20 @@ async function runCrisisEngine(
   }
 
   // 2) Conversation spike alert
-  const baselineDailyAverage = baseline.length / 7;
+  const baselineDays = new Set(
+    baseline
+      .map((m) => m.published_at?.slice(0, 10))
+      .filter(Boolean)
+  ).size;
+
+  // Require a meaningful historical baseline before declaring a spike.
+  // This protects new/low-data projects from exaggerated multipliers.
+  const hasReliableBaseline = baseline.length >= 10 && baselineDays >= 3;
+  const baselineDailyAverage =
+    baselineDays > 0 ? baseline.length / baselineDays : 0;
+
   if (
+    hasReliableBaseline &&
     current.length >= 5 &&
     baselineDailyAverage >= 1 &&
     current.length >= baselineDailyAverage * spikeMultiplier
@@ -457,6 +469,10 @@ async function runCrisisEngine(
         fingerprint: "conversation_spike:project",
         current_24h_mentions: current.length,
         baseline_daily_average: Number(baselineDailyAverage.toFixed(2)),
+        baseline_mentions: baseline.length,
+        baseline_days: baselineDays,
+        minimum_baseline_mentions: 10,
+        minimum_baseline_days: 3,
         multiplier: multiple,
         configured_multiplier: spikeMultiplier,
       },
