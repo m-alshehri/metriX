@@ -14,6 +14,7 @@ import ProjectAnalytics from "@/components/ProjectAnalytics";
 import ProjectAIInsights from "@/components/ProjectAIInsights";
 import ProjectTrends from "@/components/ProjectTrends";
 import MegaIntelligence from "@/components/MegaIntelligence";
+import AlertSettings from "@/components/AlertSettings";
 
 export default async function ProjectPage({
   params,
@@ -421,6 +422,11 @@ export default async function ProjectPage({
         <MegaIntelligence
           projectId={params.id}
           locale={locale}
+        />
+        <AlertSettings
+          projectId={params.id}
+          locale={locale}
+          status={searchParams?.settings}
         />
         <section className="mt-10">
           <div className="flex items-center justify-between">
