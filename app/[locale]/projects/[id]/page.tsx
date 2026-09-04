@@ -36,6 +36,7 @@ export default async function ProjectPage({
     insights?: string;
     insighterror?: string;
     code?: string;
+    settings?: string;
   };
 }) {
   if (!isLocale(params.locale)) notFound();
