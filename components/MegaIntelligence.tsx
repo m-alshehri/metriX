@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { buildIntelligence } from "@/lib/intelligence";
 import { runFullPipeline } from "@/app/[locale]/projects/pipeline-actions";
 import { sendTestAlertEmail } from "@/app/[locale]/projects/email-actions";
+import MetaConnect from "@/components/MetaConnect";
 
 export default async function MegaIntelligence({
   projectId,
@@ -12,7 +13,6 @@ export default async function MegaIntelligence({
 }) {
   const ar = locale === "ar";
   const db = createClient();
-
   const [
     { data: mentions },
     { data: keywords },
@@ -30,7 +30,6 @@ export default async function MegaIntelligence({
       .from("keywords")
       .select("id,keyword")
       .eq("project_id", projectId),
-
     db
       .from("pipeline_runs")
       .select("status,imported,analyzed,alerts,started_at,finished_at,details")
@@ -47,7 +46,6 @@ export default async function MegaIntelligence({
   ]);
 
   const intel = buildIntelligence(mentions || [], keywords || []);
-
   const lastRunLabel =
     lastRun?.status === "success"
       ? ar
@@ -64,7 +62,6 @@ export default async function MegaIntelligence({
       : ar
       ? "لم يتم تشغيل الـPipeline الكامل بعد."
       : "The full pipeline has not been run yet.";
-
   return (
     <section className="mt-10">
       <div className="rounded-[2rem] border bg-white p-6 shadow-sm">
@@ -73,7 +70,6 @@ export default async function MegaIntelligence({
             <div className="text-xs font-black uppercase tracking-[0.2em] text-metrix-700">
               {ar ? "الأتمتة" : "AUTOMATION"}
             </div>
-
             <h2 className="mt-2 text-2xl font-black">
               {ar ? "تشغيل الـPipeline الكامل" : "Run Full Pipeline"}
             </h2>
@@ -83,11 +79,9 @@ export default async function MegaIntelligence({
                 ? "يجمع أحدث المنشورات من X، يحلل المشاعر، يحدث AI Insights، ثم يفحص التنبيهات."
                 : "Collects new X posts, analyzes sentiment, refreshes AI Insights, then scans for alerts."}
             </p>
-
             <p className="mt-3 text-sm font-bold text-zinc-700">
               {lastRunLabel}
             </p>
-
             <p className="mt-2 text-sm text-zinc-500">
               {settings?.email_alerts_enabled && settings?.alert_email
                 ? ar
@@ -98,7 +92,6 @@ export default async function MegaIntelligence({
                 : "Email alerts are disabled."}
             </p>
           </div>
-
           <div className="flex flex-wrap gap-3">
             <form action={runFullPipeline}>
               <input type="hidden" name="locale" value={locale} />
@@ -107,7 +100,6 @@ export default async function MegaIntelligence({
                 {ar ? "تشغيل كامل الآن" : "Run Full Pipeline"}
               </button>
             </form>
-
             <form action={sendTestAlertEmail}>
               <input type="hidden" name="locale" value={locale} />
               <input type="hidden" name="project_id" value={projectId} />
@@ -119,6 +111,8 @@ export default async function MegaIntelligence({
         </div>
       </div>
 
+      <MetaConnect locale={locale} />
+
       <div className="mt-10 text-xs font-black uppercase tracking-[0.2em] text-metrix-700">
         {ar ? "الذكاء التنافسي" : "INTELLIGENCE LAYER"}
       </div>
@@ -126,7 +120,6 @@ export default async function MegaIntelligence({
       <h2 className="mt-2 text-3xl font-black">
         {ar ? "حصة الصوت والمواضيع والمؤثرون" : "Share of Voice, Topics & Influencers"}
       </h2>
-
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <div className="rounded-[2rem] border bg-white p-6 shadow-sm">
           <h3 className="font-black">{ar ? "حصة الصوت" : "Share of Voice"}</h3>
@@ -144,7 +137,6 @@ export default async function MegaIntelligence({
             ))}
           </div>
         </div>
-
         <div className="rounded-[2rem] border bg-white p-6 shadow-sm">
           <h3 className="font-black">{ar ? "المواضيع البارزة" : "Topic signals"}</h3>
           <div className="mt-4 flex flex-wrap gap-2">
@@ -155,7 +147,6 @@ export default async function MegaIntelligence({
             ))}
           </div>
         </div>
-
         <div className="rounded-[2rem] border bg-white p-6 shadow-sm">
           <h3 className="font-black">{ar ? "أهم المؤلفين" : "Top authors"}</h3>
           <div className="mt-4 space-y-3">
