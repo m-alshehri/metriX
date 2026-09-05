@@ -1,2 +1,23 @@
-import Link from "next/link";import {notFound} from "next/navigation";import {getDictionary,isLocale} from "@/lib/i18n";import {signIn} from "../auth/actions";
-export default function LoginPage({params,searchParams}:{params:{locale:string};searchParams?:{message?:string;error?:string}}){if(!isLocale(params.locale))notFound();const locale=params.locale,t=getDictionary(locale),other=locale==="en"?"ar":"en";return <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-6"><div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-soft"><div className="flex justify-between"><Link href={`/${locale}`} className="text-2xl font-black text-metrix-900">metriX</Link><Link href={`/${other}/login`} className="rounded-full border px-3 py-2 text-sm font-bold">{locale==="en"?"العربية":"English"}</Link></div><h1 className="mt-8 text-3xl font-black">{t.auth.loginTitle}</h1>{searchParams?.message==="check-email"&&<div className="mt-5 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-800">{t.auth.checkEmail}</div>}<form action={signIn} className="mt-7 space-y-4"><input type="hidden" name="locale" value={locale}/><input name="email" type="email" required className="w-full rounded-2xl border px-4 py-3" placeholder={t.auth.email}/><input name="password" type="password" required className="w-full rounded-2xl border px-4 py-3" placeholder={t.auth.password}/><button className="w-full rounded-2xl bg-metrix-900 px-4 py-3 font-bold text-white">{t.auth.loginButton}</button></form></div></main>}
+import Link from "next/link";
+import {notFound} from "next/navigation";
+import {getDictionary,isLocale} from "@/lib/i18n";
+import {signIn} from "../auth/actions";
+
+export default function LoginPage({params,searchParams}:{params:{locale:string};searchParams?:{message?:string;error?:string}}){
+  if(!isLocale(params.locale))notFound();
+  const locale=params.locale,t=getDictionary(locale),other=locale==="en"?"ar":"en",ar=locale==="ar";
+  return <main dir={ar?"rtl":"ltr"} className="flex min-h-screen items-center justify-center bg-zinc-50 px-6">
+    <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-soft">
+      <div className="flex justify-between"><Link href={`/${locale}`} className="text-2xl font-black text-metrix-900">metriX</Link><Link href={`/${other}/login`} className="rounded-full border px-3 py-2 text-sm font-bold">{locale==="en"?"العربية":"English"}</Link></div>
+      <h1 className="mt-8 text-3xl font-black">{t.auth.loginTitle}</h1>
+      {searchParams?.message==="check-email"&&<div className="mt-5 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-800">{t.auth.checkEmail}</div>}
+      {searchParams?.message==="password-updated"&&<div className="mt-5 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-800">{ar?"تم تحديث كلمة المرور بنجاح. سجّل الدخول بكلمة المرور الجديدة.":"Your password has been updated. Sign in with your new password."}</div>}
+      {searchParams?.error&&<div className="mt-5 rounded-2xl bg-red-50 p-4 text-sm text-red-800">{ar?"تعذر تسجيل الدخول. تحقق من البريد الإلكتروني وكلمة المرور.":"Unable to sign in. Check your email and password."}</div>}
+      <form action={signIn} className="mt-7 space-y-4">
+        <input type="hidden" name="locale" value={locale}/><input name="email" type="email" required className="w-full rounded-2xl border px-4 py-3" placeholder={t.auth.email}/><input name="password" type="password" required className="w-full rounded-2xl border px-4 py-3" placeholder={t.auth.password}/>
+        <div className={ar?"text-left":"text-right"}><Link href={`/${locale}/forgot-password`} className="text-sm font-bold text-metrix-900 hover:underline">{ar?"نسيت كلمة المرور؟":"Forgot password?"}</Link></div>
+        <button className="w-full rounded-2xl bg-metrix-900 px-4 py-3 font-bold text-white">{t.auth.loginButton}</button>
+      </form>
+    </div>
+  </main>
+}
