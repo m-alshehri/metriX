@@ -134,7 +134,7 @@ export async function POST(req: Request) {
   const byPlatform = new Map<string, any>();
   for (const item of normalized) byPlatform.set(item.platform, item);
 
-  const rows = [...byPlatform.values()].map((item) => ({
+  const rows = Array.from(byPlatform.values()).map((item) => ({
     user_id: user.id,
     project_id: projectId,
     platform: item.platform,
