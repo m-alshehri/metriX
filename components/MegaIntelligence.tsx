@@ -3,6 +3,7 @@ import { buildIntelligence } from "@/lib/intelligence";
 import { runFullPipeline } from "@/app/[locale]/projects/pipeline-actions";
 import { sendTestAlertEmail } from "@/app/[locale]/projects/email-actions";
 import MetaConnect from "@/components/MetaConnect";
+import SocialAccounts from "@/components/SocialAccounts";
 
 export default async function MegaIntelligence({
   projectId,
@@ -111,7 +112,7 @@ export default async function MegaIntelligence({
         </div>
       </div>
 
-      <MetaConnect locale={locale} />
+      <SocialAccounts projectId={projectId} locale={locale} />
 
       <div className="mt-10 text-xs font-black uppercase tracking-[0.2em] text-metrix-700">
         {ar ? "الذكاء التنافسي" : "INTELLIGENCE LAYER"}
