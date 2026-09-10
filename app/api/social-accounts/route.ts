@@ -158,7 +158,7 @@ export async function POST(req: Request) {
     }
   }
 
-  const allPlatforms = [...ALLOWED];
+  const allPlatforms = Array.from(ALLOWED);
   const platformsToDelete = allPlatforms.filter(
     (platform) => !wantedPlatforms.includes(platform)
   );
