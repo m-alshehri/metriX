@@ -18,7 +18,9 @@ export default function ProjectTrends({ mentions, locale }: { mentions: Mention[
       const d = m.published_at.slice(0,10);
       days.set(d,(days.get(d)||0)+1);
     }
-    for (const raw of String(m.content||"").toLowerCase().split(/[^\p{L}\p{N}_#@]+/u)) {
+    for (const raw of String(m.content || "")
+      .toLowerCase()
+      .split(/[^a-zA-Z0-9\u0600-\u06FF_#@]+/)) {
       const w = raw.trim();
       if (w.length < 3 || stop.has(w)) continue;
       terms.set(w,(terms.get(w)||0)+1);
