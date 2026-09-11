@@ -25,7 +25,9 @@ export default async function MegaIntelligence({ projectId, locale }: { projectI
     const x = platforms.get(p)||{count:0,engagement:0}; x.count++; x.engagement += e; platforms.set(p,x);
     const a = m.author_username || m.author_name;
     if (a) authors.set(String(a), (authors.get(String(a))||0)+e);
-    for (const raw of String(m.content||"").toLowerCase().split(/[^\p{L}\p{N}_#@]+/u)) {
+    for (const raw of String(m.content || "")
+      .toLowerCase()
+      .split(/[^a-zA-Z0-9\u0600-\u06FF_#@]+/)) {
       const w=raw.trim(); if (w.length>=3 && !stop.has(w)) terms.set(w,(terms.get(w)||0)+1);
     }
   }
