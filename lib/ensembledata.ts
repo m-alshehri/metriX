@@ -70,21 +70,11 @@ function iso(value: any) {
 }
 
 function firstArray(payload: any): any[] {
-  const candidates = [
-    payload?.data,
-    payload?.data?.data,
-    payload?.data?.items,
-    payload?.data?.posts,
-    payload?.data?.videos,
-    payload?.data?.tweets,
-    payload?.items,
-    payload?.posts,
-    payload?.videos,
-    payload?.tweets,
-    payload?.results,
-  ];
-  for (const c of candidates) if (Array.isArray(c)) return c;
-  return [];
+  const preferred = [payload?.data?.posts,payload?.data?.videos,payload?.data?.tweets,payload?.data?.items,payload?.posts,payload?.videos,payload?.tweets,payload?.items,payload?.results,Array.isArray(payload?.data)?payload.data:null];
+  for (const c of preferred) if (Array.isArray(c)) return c;
+  const found:any[][]=[];
+  const walk=(v:any)=>{ if(!v||typeof v!=="object")return; if(Array.isArray(v)){ if(v.some((x:any)=>x&&typeof x==="object"))found.push(v); for(const x of v)walk(x); } else for(const x of Object.values(v))walk(x); };
+  walk(payload); found.sort((a,b)=>b.length-a.length); return found[0]||[];
 }
 
 function deepFind(obj: any, keys: string[]): any {
@@ -292,6 +282,11 @@ function normalizeYouTube(item: any, handle: string): NormalizedMention | null {
   };
 }
 
+
+function cleanSubreddit(value: string) { return String(value || "").trim().replace(/^https?:\/\/(www\.)?reddit\.com\/r\//i, "").replace(/^r\//i, "").replace(/\/.*$/, ""); }
+function normalizeReddit(item:any, subreddit:string): NormalizedMention | null { const x=item?.data && !item?.data?.posts ? item.data : item; const id=str(x?.id,x?.name); if(!id)return null; const content=[str(x?.title),str(x?.selftext,x?.body)].filter(Boolean).join("\n\n")||"[Reddit post]"; const per=str(x?.permalink); return {platform:"Reddit",external_id:`reddit:${id}`,author_name:str(x?.author)||null,author_username:str(x?.author)||null,content,post_url:per?`https://www.reddit.com${per}`:str(x?.url)||null,published_at:iso(x?.created_utc,x?.created),likes:num(x?.score,x?.ups),shares:num(x?.num_crossposts),replies:num(x?.num_comments),views:num(x?.view_count)}; }
+function normalizeSnapchat(item:any, handle:string): NormalizedMention | null { const id=str(item?.id,item?.snap_id,item?.story_id,item?.content_id); const content=str(item?.description,item?.title,item?.text,item?.caption); if(!id||!content)return null; return {platform:"Snapchat",external_id:`snap:${id}`,author_name:str(item?.display_name,item?.name,handle)||null,author_username:handle||null,content,post_url:str(item?.url,item?.share_url,item?.permalink)||null,published_at:iso(item?.timestamp,item?.created_at,item?.create_time),likes:num(item?.likes,item?.like_count),shares:num(item?.shares,item?.share_count),replies:num(item?.comments,item?.comment_count),views:num(item?.views,item?.view_count)}; }
+
 export async function collectFromEnsembleData(account: SocialAccount) {
   const platform = String(account.platform || "").toLowerCase();
   const handle = cleanHandle(account.handle);
@@ -339,6 +334,21 @@ export async function collectFromEnsembleData(account: SocialAccount) {
     payload = await ed("/youtube/channel/videos", { browseId, depth: 1 });
     items = firstArray(payload);
     return { externalId, mentions: items.map((x) => normalizeYouTube(x, handle)).filter(Boolean) as NormalizedMention[] };
+  }
+
+
+  if (platform === "reddit") {
+    const subreddit = cleanSubreddit(account.handle);
+    if (!subreddit) throw new Error("Enter a subreddit, e.g. r/saudiarabia");
+    payload = await ed("/reddit/subreddit/posts", { name: subreddit, sort: "new", period: "hour", cursor: "" });
+    items = firstArray(payload);
+    return { externalId: subreddit, mentions: items.map((x) => normalizeReddit(x, subreddit)).filter(Boolean) as NormalizedMention[] };
+  }
+
+  if (platform === "snapchat") {
+    payload = await ed("/snapchat/user/info", { name: handle });
+    items = firstArray(payload);
+    return { externalId, mentions: items.map((x) => normalizeSnapchat(x, handle)).filter(Boolean) as NormalizedMention[] };
   }
 
   throw new Error(`EnsembleData collector is not configured for ${platform}`);

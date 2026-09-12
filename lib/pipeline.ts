@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { collectFromEnsembleData, type SocialAccount } from "@/lib/ensembledata";
+import { collectFacebook, collectLinkedIn, collectGoogleMapsReviews } from "@/lib/brightdata";
 
 function outputText(payload: any) {
   if (typeof payload?.output_text === "string") return payload.output_text;
@@ -48,76 +49,6 @@ async function insertMention(db: any, projectId: string, userId: string, account
   if (String(error.code) === "23505") return 0;
   console.error("mention insert error", error);
   return 0;
-}
-
-async function collectFacebookWithExistingMeta(db: any, projectId: string, userId: string, account: SocialAccount) {
-  const { data: token, error } = await db.rpc("get_meta_token_for_user", { p_user_id: userId });
-  if (error || !token) {
-    await markAccount(
-      db,
-      account.id,
-      "authorization_required",
-      "Facebook is not currently supported by EnsembleData. Connect Meta to collect Facebook Page data."
-    );
-    return { imported: 0, status: "authorization_required" };
-  }
-
-  const { data: asset } = await db
-    .from("meta_assets")
-    .select("external_id,name,username")
-    .eq("user_id", userId)
-    .eq("project_id", projectId)
-    .eq("asset_type", "facebook_page")
-    .maybeSingle();
-
-  if (!asset?.external_id) {
-    await markAccount(db, account.id, "authorization_required", "Assign a Facebook Page to this project in Meta");
-    return { imported: 0, status: "authorization_required" };
-  }
-
-  const accountsUrl = new URL("https://graph.facebook.com/v24.0/me/accounts");
-  accountsUrl.searchParams.set("fields", "id,name,access_token");
-  accountsUrl.searchParams.set("limit", "100");
-  accountsUrl.searchParams.set("access_token", token);
-
-  const ar = await fetch(accountsUrl.toString(), { cache: "no-store" });
-  const aj = await ar.json();
-  if (!ar.ok) throw new Error(aj?.error?.message || "Meta Page lookup failed");
-
-  const page = (aj?.data || []).find((p: any) => String(p.id) === String(asset.external_id));
-  if (!page?.access_token) throw new Error("Assigned Facebook Page is not accessible");
-
-  const postsUrl = new URL(`https://graph.facebook.com/v24.0/${page.id}/posts`);
-  postsUrl.searchParams.set(
-    "fields",
-    "id,message,created_time,permalink_url,shares,comments.limit(0).summary(true),reactions.limit(0).summary(true)"
-  );
-  postsUrl.searchParams.set("limit", "20");
-  postsUrl.searchParams.set("access_token", page.access_token);
-
-  const r = await fetch(postsUrl.toString(), { cache: "no-store" });
-  const j = await r.json();
-  if (!r.ok) throw new Error(j?.error?.message || "Facebook collection failed");
-
-  let imported = 0;
-  for (const p of j?.data || []) {
-    imported += await insertMention(db, projectId, userId, account, {
-      platform: "Facebook",
-      external_id: `fb:${p.id}`,
-      author_name: page.name || asset.name || account.handle,
-      author_username: asset.username || account.handle,
-      content: p.message || "[Facebook post]",
-      post_url: p.permalink_url || null,
-      published_at: p.created_time || new Date().toISOString(),
-      likes: Number(p.reactions?.summary?.total_count || 0),
-      shares: Number(p.shares?.count || 0),
-      replies: Number(p.comments?.summary?.total_count || 0),
-      views: 0,
-    });
-  }
-
-  await markAccount(db, account.id, "success", null, String(page.id));
-  return { imported, status: "success" };
 }
 
 async function analyzeSentiment(db: any, projectId: string) {
@@ -385,36 +316,23 @@ export async function runProjectPipeline(projectId: string, userId: string) {
       const p = String(account.platform || "").toLowerCase();
 
       try {
-        if (p === "facebook") {
-          const fb = await collectFacebookWithExistingMeta(db, projectId, userId, account);
-          imported += fb.imported;
-          details.facebook = fb;
-          continue;
-        }
+        let result: any;
+        let provider = "EnsembleData";
+        if (p === "facebook") { provider = "Bright Data"; result = await collectFacebook(account.handle); }
+        else if (p === "linkedin") { provider = "Bright Data"; result = await collectLinkedIn(account.handle); }
+        else if (p === "google_maps") { provider = "Bright Data"; result = await collectGoogleMapsReviews(account.handle); }
+        else if (["x","youtube","instagram","tiktok","threads","reddit","snapchat"].includes(p)) { result = await collectFromEnsembleData(account); }
+        else { details[p] = { imported: 0, status: "unsupported" }; continue; }
 
-        if (!["x", "youtube", "instagram", "tiktok", "threads"].includes(p)) {
-          details[p] = { imported: 0, status: "unsupported" };
-          continue;
-        }
-
-        const result = await collectFromEnsembleData(account);
         let n = 0;
-        for (const mention of result.mentions) {
-          n += await insertMention(db, projectId, userId, account, mention);
-        }
+        for (const mention of result.mentions || []) n += await insertMention(db, projectId, userId, account, mention);
         imported += n;
-
-        await markAccount(db, account.id, "success", null, result.externalId);
-        details[p] = {
-          imported: n,
-          fetched: result.mentions.length,
-          status: "success",
-          provider: "EnsembleData",
-        };
+        await markAccount(db, account.id, "success", null, result.externalId || null);
+        details[p] = { imported: n, fetched: result.mentions?.length || 0, status: "success", provider };
       } catch (e: any) {
         const message = String(e?.message || e);
         await markAccount(db, account.id, "failed", message);
-        details[p] = { imported: 0, status: "failed", error: message, provider: "EnsembleData" };
+        details[p] = { imported: 0, status: "failed", error: message, provider: ["facebook","linkedin","google_maps"].includes(p) ? "Bright Data" : "EnsembleData" };
       }
     }
 
