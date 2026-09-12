@@ -91,24 +91,42 @@ function arraysDeep(value: any, out: any[][] = []): any[][] {
 
 function chooseItems(payload: any) {
   const preferred = [
+    payload?.data?.data,
     payload?.data?.posts,
+    payload?.data?.items,
     payload?.data?.videos,
     payload?.data?.tweets,
-    payload?.data?.items,
     payload?.posts,
+    payload?.items,
     payload?.videos,
     payload?.tweets,
-    payload?.items,
     payload?.results,
     Array.isArray(payload?.data) ? payload.data : null,
   ];
 
   for (const v of preferred) {
-    if (Array.isArray(v)) return v;
+    if (Array.isArray(v) && v.length) return v;
   }
 
-  const found = arraysDeep(payload).sort((a, b) => b.length - a.length);
-  return found[0] || [];
+  const arrays = arraysDeep(payload);
+
+  function score(arr: any[]) {
+    if (!arr.length) return -1;
+    const sample = arr.slice(0, 3);
+    let points = 0;
+    for (const item of sample) {
+      const x = item?.node || item?.data || item;
+      if (!x || typeof x !== "object") continue;
+      if (x.id || x.pk || x.aweme_id || x.videoId || x.rest_id) points += 5;
+      if (x.caption || x.text || x.title || x.desc || x.full_text || x.selftext) points += 4;
+      if (x.like_count !== undefined || x.likes !== undefined || x.score !== undefined) points += 2;
+      if (x.created_at || x.taken_at || x.timestamp || x.created_utc) points += 2;
+    }
+    return points;
+  }
+
+  arrays.sort((a, b) => score(b) - score(a) || b.length - a.length);
+  return arrays[0] || [];
 }
 
 function deepFind(obj: any, keys: string[]): any {
@@ -166,6 +184,52 @@ async function ed(
   }
 
   return payload;
+}
+
+
+function chooseInstagramPosts(payload: any) {
+  const direct = [
+    payload?.data,
+    payload?.data?.data,
+    payload?.data?.posts,
+    payload?.data?.items,
+    payload?.posts,
+    payload?.items,
+    payload?.feed_items,
+  ];
+
+  for (const v of direct) {
+    if (
+      Array.isArray(v) &&
+      v.some((item: any) => {
+        const x = item?.media || item?.node || item;
+        return !!(x?.pk || x?.id || x?.code || x?.shortcode);
+      })
+    ) {
+      return v.map((item: any) => item?.media || item?.node || item);
+    }
+  }
+
+  const arrays = arraysDeep(payload);
+  const candidates = arrays
+    .map((arr) => ({
+      arr,
+      score: arr.reduce((total: number, item: any) => {
+        const x = item?.media || item?.node || item;
+        if (!x || typeof x !== "object") return total;
+        let s = 0;
+        if (x.pk || x.id || x.code || x.shortcode) s += 5;
+        if (x.caption || x.caption_text || x.text) s += 4;
+        if (x.like_count !== undefined || x.comment_count !== undefined) s += 2;
+        if (x.taken_at || x.taken_at_timestamp || x.created_at) s += 2;
+        return total + s;
+      }, 0),
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  return (candidates[0]?.arr || []).map(
+    (item: any) => item?.media || item?.node || item
+  );
 }
 
 async function resolveTwitterId(handle: string) {
@@ -653,26 +717,20 @@ function parseRedditTarget(value: string) {
 }
 
 async function collectRedditUserPublic(username: string) {
-  const url =
-    `https://www.reddit.com/user/${encodeURIComponent(username)}/submitted.json` +
-    "?limit=25&raw_json=1";
-
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent": "metriX-social-listening/1.0",
-      Accept: "application/json",
-    },
-    cache: "no-store",
+  const payload = await ed("/reddit/keyword/search", {
+    name: `author:${username}`,
+    sort: "new",
+    period: "all",
+    cursor: "",
   });
 
-  if (!response.ok) {
-    throw new Error(`Reddit public user feed returned ${response.status}`);
-  }
+  const items = chooseItems(payload);
 
-  const payload = await response.json();
-  const children = payload?.data?.children;
-
-  return Array.isArray(children) ? children : [];
+  return items.filter((item: any) => {
+    const x = item?.data || item;
+    const author = str(x?.author);
+    return !author || author.toLowerCase() === username.toLowerCase();
+  });
 }
 
 export async function collectFromEnsembleData(account: SocialAccount) {
@@ -748,7 +806,7 @@ export async function collectFromEnsembleData(account: SocialAccount) {
       alternative_method: false,
     });
 
-    items = chooseItems(payload);
+    items = chooseInstagramPosts(payload);
 
     return {
       externalId,

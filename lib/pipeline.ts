@@ -13,7 +13,13 @@ function outputText(payload: any) {
   return "";
 }
 
-async function markAccount(db: any, id: string, status: string, error?: string | null, externalId?: string | null) {
+async function markAccount(
+  db: any,
+  id: string,
+  status: string,
+  error?: string | null,
+  externalId?: string | null
+) {
   const patch: any = {
     last_synced_at: new Date().toISOString(),
     last_sync_status: status,

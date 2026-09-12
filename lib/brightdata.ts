@@ -14,7 +14,7 @@ export type BrightMention = {
   views: number;
 };
 
-const API = "https://api.brightdata.com/datasets/v3/scrape";
+const API = "https://api.brightdata.com/datasets/v3";
 
 const DATASETS = {
   facebook: "gd_lkaxegm826bjpoo9m5",
@@ -34,8 +34,8 @@ function n(...values: any[]) {
   for (const v of values) {
     if (v === 0) return 0;
     if (v !== undefined && v !== null && v !== "") {
-      const value = Number(String(v).replace(/,/g, ""));
-      if (Number.isFinite(value)) return value;
+      const num = Number(String(v).replace(/,/g, ""));
+      if (Number.isFinite(num)) return num;
     }
   }
   return 0;
@@ -44,91 +44,119 @@ function n(...values: any[]) {
 function iso(...values: any[]) {
   for (const value of values) {
     if (value === undefined || value === null || value === "") continue;
-
     if (typeof value === "number" || /^\d+$/.test(String(value))) {
       const x = Number(value);
       const d = new Date(x > 100000000000 ? x : x * 1000);
       if (!Number.isNaN(d.getTime())) return d.toISOString();
     }
-
     const d = new Date(value);
     if (!Number.isNaN(d.getTime())) return d.toISOString();
   }
-
   return new Date().toISOString();
 }
 
-function facebookUrl(value: string) {
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function canonicalFacebook(value: string) {
   let v = String(value || "").trim();
   if (!v) throw new Error("Facebook page URL or username is required");
-
   if (!/^https?:\/\//i.test(v)) {
     v = `https://www.facebook.com/${v.replace(/^@/, "").replace(/^facebook\.com\//i, "")}`;
   }
-
-  try {
-    const u = new URL(v);
-    const parts = u.pathname.split("/").filter(Boolean);
-    if (!parts.length) throw new Error("Invalid Facebook page URL");
-    return `https://www.facebook.com/${parts[0]}`;
-  } catch {
-    throw new Error("Invalid Facebook page URL");
-  }
+  const u = new URL(v);
+  const p = u.pathname.split("/").filter(Boolean);
+  if (!p[0]) throw new Error("Invalid Facebook page URL");
+  return `https://www.facebook.com/${p[0]}`;
 }
 
-function linkedinUrl(value: string) {
+function canonicalLinkedIn(value: string) {
   let v = String(value || "").trim();
   if (!v) throw new Error("LinkedIn company/profile URL is required");
-
   if (!/^https?:\/\//i.test(v)) {
     v = v.replace(/^@/, "").replace(/^linkedin\.com\//i, "");
-    if (v.startsWith("company/") || v.startsWith("in/")) {
-      v = `https://www.linkedin.com/${v}`;
-    } else {
-      v = `https://www.linkedin.com/company/${v}`;
-    }
+    v = v.startsWith("company/") || v.startsWith("in/")
+      ? `https://www.linkedin.com/${v}`
+      : `https://www.linkedin.com/company/${v}`;
   }
 
+  const u = new URL(v);
+  const p = u.pathname.split("/").filter(Boolean);
+  const company = p.indexOf("company");
+  if (company >= 0 && p[company + 1]) {
+    return `https://www.linkedin.com/company/${p[company + 1]}`;
+  }
+  const profile = p.indexOf("in");
+  if (profile >= 0 && p[profile + 1]) {
+    return `https://www.linkedin.com/in/${p[profile + 1]}`;
+  }
+  throw new Error("Use a canonical LinkedIn company or profile URL");
+}
+
+function explainBrightDataError(status: number, raw: string) {
+  if (/customer is not active/i.test(raw)) {
+    return new Error(
+      "Bright Data account is not active. Activate Web Scraper API/billing, then run the pipeline again."
+    );
+  }
+  if (/invalid input/i.test(raw)) {
+    return new Error(
+      "Bright Data rejected the target URL. Use the canonical public page/profile/place URL."
+    );
+  }
+  return new Error(raw || `Bright Data ${status}`);
+}
+
+async function readJsonResponse(response: Response) {
+  const text = await response.text();
   try {
-    const u = new URL(v);
-    const parts = u.pathname.split("/").filter(Boolean);
-
-    const companyIndex = parts.indexOf("company");
-    if (companyIndex >= 0 && parts[companyIndex + 1]) {
-      return `https://www.linkedin.com/company/${parts[companyIndex + 1]}`;
-    }
-
-    const profileIndex = parts.indexOf("in");
-    if (profileIndex >= 0 && parts[profileIndex + 1]) {
-      return `https://www.linkedin.com/in/${parts[profileIndex + 1]}`;
-    }
-
-    throw new Error("Use a LinkedIn company or profile URL");
+    return { payload: JSON.parse(text), text };
   } catch {
-    throw new Error("Invalid LinkedIn URL");
+    return { payload: null, text };
   }
 }
 
-function normalizeBrightDataError(status: number, text: string, payload?: any) {
-  const raw = s(
-    payload?.message,
-    payload?.error?.message,
-    payload?.error,
-    payload?.errors?.[0]?.message,
-    text
+async function downloadSnapshot(token: string, snapshotId: string) {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const progress = await fetch(`${API}/progress/${snapshotId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+
+    const { payload, text } = await readJsonResponse(progress);
+    if (!progress.ok) throw explainBrightDataError(progress.status, text);
+
+    const status = String(payload?.status || "").toLowerCase();
+    if (status === "ready") {
+      const result = await fetch(
+        `${API}/snapshot/${snapshotId}?format=json`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        }
+      );
+
+      const parsed = await readJsonResponse(result);
+      if (!result.ok) throw explainBrightDataError(result.status, parsed.text);
+
+      return Array.isArray(parsed.payload)
+        ? parsed.payload
+        : Array.isArray(parsed.payload?.data)
+          ? parsed.payload.data
+          : [];
+    }
+
+    if (status === "failed") {
+      throw new Error(`Bright Data snapshot ${snapshotId} failed`);
+    }
+
+    await sleep(3000);
+  }
+
+  throw new Error(
+    "Bright Data collection is still processing. Run the pipeline again shortly."
   );
-
-  if (/customer is not active/i.test(raw)) {
-    return new Error(
-      "Bright Data account is not active. Activate Web Scraper API/billing in Bright Data, then run the pipeline again."
-    );
-  }
-
-  if (/invalid input/i.test(raw)) {
-    return new Error("Bright Data rejected the target URL. Check that it is a canonical public page/profile/place URL.");
-  }
-
-  return new Error(raw || `Bright Data ${status}`);
 }
 
 async function scrape(
@@ -139,13 +167,13 @@ async function scrape(
   const token = process.env.BRIGHTDATA_API_TOKEN;
   if (!token) throw new Error("BRIGHTDATA_API_TOKEN is missing");
 
-  const url = new URL(API);
+  const url = new URL(`${API}/scrape`);
   url.searchParams.set("dataset_id", datasetId);
   url.searchParams.set("include_errors", "true");
   url.searchParams.set("format", "json");
 
-  for (const [key, value] of Object.entries(extraQuery || {})) {
-    url.searchParams.set(key, value);
+  for (const [k, v] of Object.entries(extraQuery || {})) {
+    url.searchParams.set(k, v);
   }
 
   const response = await fetch(url.toString(), {
@@ -158,40 +186,32 @@ async function scrape(
     cache: "no-store",
   });
 
-  const text = await response.text();
+  const { payload, text } = await readJsonResponse(response);
 
-  let payload: any = null;
-  try {
-    payload = JSON.parse(text);
-  } catch {
-    if (!response.ok) throw normalizeBrightDataError(response.status, text);
-    throw new Error(`Bright Data returned non-JSON (${response.status})`);
+  if (response.status === 202) {
+    const snapshotId = s(payload?.snapshot_id, payload?.id);
+    if (!snapshotId) throw new Error("Bright Data returned 202 without snapshot_id");
+    return await downloadSnapshot(token, snapshotId);
   }
 
-  if (!response.ok) throw normalizeBrightDataError(response.status, text, payload);
+  if (!response.ok) throw explainBrightDataError(response.status, text);
 
   if (payload?.error) {
-    throw normalizeBrightDataError(response.status, text, payload);
+    throw explainBrightDataError(response.status, s(payload.error, payload.message));
   }
 
-  return Array.isArray(payload)
-    ? payload
-    : Array.isArray(payload?.data)
-      ? payload.data
-      : [];
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
 }
 
 export async function collectFacebook(target: string) {
-  const url = facebookUrl(target);
+  const url = canonicalFacebook(target);
+  const rows = await scrape(DATASETS.facebook, [{ url }]);
 
-  const rows = await scrape(
-    DATASETS.facebook,
-    [{ url }]
-  );
-
-  const mentions = rows
+  const mentions: BrightMention[] = rows
     .filter((x: any) => x && !x.error)
-    .map((x: any): BrightMention => {
+    .map((x: any) => {
       const id = s(x.post_id, x.shortcode, x.id, x.url);
       return {
         platform: "Facebook",
@@ -213,32 +233,27 @@ export async function collectFacebook(target: string) {
 }
 
 export async function collectLinkedIn(target: string) {
-  const url = linkedinUrl(target);
+  const url = canonicalLinkedIn(target);
   const isProfile = /linkedin\.com\/in\//i.test(url);
 
   const rows = await scrape(
     DATASETS.linkedin,
-    [
-      {
-        url,
-        only_authored_posts: true,
-      },
-    ],
+    [{ url, only_authored_posts: true }],
     {
       type: "discover_new",
       discover_by: isProfile ? "profile_url" : "company_url",
     }
   );
 
-  const mentions = rows
+  const mentions: BrightMention[] = rows
     .filter((x: any) => x && !x.error)
-    .map((x: any): BrightMention => {
+    .map((x: any) => {
       const id = s(x.id, x.post_id, x.activity_id, x.url);
       return {
         platform: "LinkedIn",
         external_id: `li:${id}`,
         author_name: s(x.user_name, x.author_name, x.name, x.headline) || null,
-        author_username: s(x.user_url, x.use_url, x.author_url) || null,
+        author_username: s(x.user_url, x.author_url) || null,
         content: s(x.post_text, x.text, x.description, x.title, x.headline) || "[LinkedIn post]",
         post_url: s(x.url) || null,
         published_at: iso(x.date_posted, x.published_at, x.timestamp),
@@ -255,37 +270,26 @@ export async function collectLinkedIn(target: string) {
 
 export async function collectGoogleMapsReviews(target: string) {
   const url = String(target || "").trim();
-
   if (!/^https?:\/\//i.test(url)) {
-    throw new Error("Google Maps requires a full public place URL");
+    throw new Error("Google Maps requires a full public Google Maps place URL");
   }
 
-  const rows = await scrape(
-    DATASETS.googleMaps,
-    [
-      {
-        url,
-        days_limit: 90,
-        sort_by: "Newest",
-      },
-    ]
-  );
+  const rows = await scrape(DATASETS.googleMaps, [
+    { url, days_limit: 90, sort_by: "Newest" },
+  ]);
 
-  const mentions = rows
+  const mentions: BrightMention[] = rows
     .filter((x: any) => x && !x.error)
-    .map((x: any): BrightMention => {
+    .map((x: any) => {
       const rating = n(x.rating, x.review_rating, x.stars);
       const id = s(
         x.review_id,
         x.id,
         `${x.reviewer_name || "reviewer"}:${x.timestamp || x.review_date || ""}`
       );
-
       const text =
         s(x.review_text, x.text, x.review, x.comment) ||
-        (rating
-          ? `${rating}/5 Google Maps rating`
-          : "[Google Maps review]");
+        (rating ? `${rating}/5 Google Maps rating` : "[Google Maps review]");
 
       return {
         platform: "Google Maps",
@@ -293,7 +297,7 @@ export async function collectGoogleMapsReviews(target: string) {
         author_name: s(x.reviewer_name, x.author_name, x.name) || null,
         author_username: s(x.reviewer_url, x.author_url) || null,
         content: rating ? `[Rating: ${rating}/5] ${text}` : text,
-        post_url: s(x.url, x.review_url) || url,
+        post_url: s(x.review_url, x.url) || url,
         published_at: iso(x.review_date, x.date, x.timestamp, x.date_posted),
         likes: n(x.review_likes, x.likes),
         shares: 0,
