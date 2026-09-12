@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase-admin";
-import { runFullProjectPipeline } from "@/lib/full-pipeline";
+import { runProjectPipeline } from "@/lib/pipeline";
 
 export const maxDuration = 60;
 
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
       results.push({
         project_id: p.id,
         ok: true,
-        ...(await runFullProjectPipeline(p.id, p.user_id)),
+        ...(await runProjectPipeline(p.id, p.user_id)),
       });
     } catch (e: any) {
       results.push({
