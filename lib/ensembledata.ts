@@ -28,13 +28,15 @@ export type NormalizedMention = {
 function cleanHandle(value: string) {
   let v = String(value || "").trim();
   if (!v) return "";
+
   try {
-    if (v.startsWith("http://") || v.startsWith("https://")) {
+    if (/^https?:\/\//i.test(v)) {
       const u = new URL(v);
       const parts = u.pathname.split("/").filter(Boolean);
       if (parts.length) v = parts[parts.length - 1];
     }
   } catch {}
+
   return v.replace(/^@/, "").trim();
 }
 
@@ -42,8 +44,8 @@ function num(...values: any[]) {
   for (const v of values) {
     if (v === 0) return 0;
     if (v !== undefined && v !== null && v !== "") {
-      const n = Number(String(v).replace(/,/g, ""));
-      if (Number.isFinite(n)) return n;
+      const x = Number(String(v).replace(/,/g, ""));
+      if (Number.isFinite(x)) return x;
     }
   }
   return 0;
@@ -62,9 +64,8 @@ function iso(...values: any[]) {
     if (value === undefined || value === null || value === "") continue;
 
     if (typeof value === "number" || /^\d+$/.test(String(value))) {
-      const n = Number(value);
-      const ms = n > 100000000000 ? n : n * 1000;
-      const d = new Date(ms);
+      const x = Number(value);
+      const d = new Date(x > 100000000000 ? x : x * 1000);
       if (!Number.isNaN(d.getTime())) return d.toISOString();
     }
 
@@ -75,67 +76,117 @@ function iso(...values: any[]) {
   return new Date().toISOString();
 }
 
-function firstArray(payload: any): any[] {
-  const preferred = [payload?.data?.posts,payload?.data?.videos,payload?.data?.tweets,payload?.data?.items,payload?.posts,payload?.videos,payload?.tweets,payload?.items,payload?.results,Array.isArray(payload?.data)?payload.data:null];
-  for (const c of preferred) if (Array.isArray(c)) return c;
-  const found:any[][]=[];
-  const walk=(v:any)=>{ if(!v||typeof v!=="object")return; if(Array.isArray(v)){ if(v.some((x:any)=>x&&typeof x==="object"))found.push(v); for(const x of v)walk(x); } else for(const x of Object.values(v))walk(x); };
-  walk(payload); found.sort((a,b)=>b.length-a.length); return found[0]||[];
+function arraysDeep(value: any, out: any[][] = []): any[][] {
+  if (!value || typeof value !== "object") return out;
+
+  if (Array.isArray(value)) {
+    if (value.length && value.some((x) => x && typeof x === "object")) out.push(value);
+    for (const item of value) arraysDeep(item, out);
+  } else {
+    for (const child of Object.values(value)) arraysDeep(child, out);
+  }
+
+  return out;
+}
+
+function chooseItems(payload: any) {
+  const preferred = [
+    payload?.data?.posts,
+    payload?.data?.videos,
+    payload?.data?.tweets,
+    payload?.data?.items,
+    payload?.posts,
+    payload?.videos,
+    payload?.tweets,
+    payload?.items,
+    payload?.results,
+    Array.isArray(payload?.data) ? payload.data : null,
+  ];
+
+  for (const v of preferred) {
+    if (Array.isArray(v)) return v;
+  }
+
+  const found = arraysDeep(payload).sort((a, b) => b.length - a.length);
+  return found[0] || [];
 }
 
 function deepFind(obj: any, keys: string[]): any {
   if (!obj || typeof obj !== "object") return undefined;
+
   for (const k of keys) {
     if (obj[k] !== undefined && obj[k] !== null) return obj[k];
   }
+
   for (const value of Object.values(obj)) {
-    if (value && typeof value === "object" && !Array.isArray(value)) {
+    if (value && typeof value === "object") {
       const found = deepFind(value, keys);
       if (found !== undefined) return found;
     }
   }
+
   return undefined;
 }
 
-async function ed(path: string, params: Record<string, string | number | boolean | undefined>) {
+async function ed(
+  path: string,
+  params: Record<string, string | number | boolean | undefined>
+) {
   const token = process.env.ENSEMBLEDATA_TOKEN;
   if (!token) throw new Error("ENSEMBLEDATA_TOKEN is missing");
 
   const url = new URL(ROOT + path);
-  const all: Record<string, any> = { ...params, token };
-  for (const [k, v] of Object.entries(all)) {
-    if (v !== undefined && v !== null && v !== "") url.searchParams.set(k, String(v));
+
+  for (const [key, value] of Object.entries({ ...params, token })) {
+    if (value !== undefined && value !== null && value !== "") {
+      url.searchParams.set(key, String(value));
+    }
   }
 
-  const r = await fetch(url.toString(), { cache: "no-store" });
-  let payload: any = null;
+  const response = await fetch(url.toString(), { cache: "no-store" });
+  const text = await response.text();
+
+  let payload: any;
   try {
-    payload = await r.json();
+    payload = JSON.parse(text);
   } catch {
-    throw new Error(`EnsembleData returned non-JSON (${r.status})`);
+    throw new Error(`EnsembleData returned non-JSON (${response.status})`);
   }
 
-  if (!r.ok) {
+  if (!response.ok) {
     throw new Error(
-      str(payload?.message, payload?.error?.message, payload?.error, `EnsembleData ${r.status}`)
+      str(
+        payload?.detail?.[0]?.msg,
+        payload?.message,
+        payload?.error?.message,
+        payload?.error,
+        `EnsembleData ${response.status}`
+      )
     );
   }
+
   return payload;
 }
 
 async function resolveTwitterId(handle: string) {
-  const p = await ed("/twitter/user/info", { name: cleanHandle(handle) });
-  const id = deepFind(p, ["rest_id", "id", "user_id"]);
+  const payload = await ed("/twitter/user/info", {
+    name: cleanHandle(handle),
+  });
+
+  const id = deepFind(payload, ["rest_id", "id", "user_id"]);
   if (!id) throw new Error("Could not resolve X username");
+
   return String(id);
 }
 
-async function resolveInstagramId(handle: string, externalId?: string | null) {
+async function resolveInstagramId(
+  handle: string,
+  externalId?: string | null
+) {
   if (externalId && /^\d+$/.test(externalId)) return externalId;
 
-  // EnsembleData has changed Instagram resolver shapes over time.
-  // Try the username profile resolver first, then the search-style resolver.
   const username = cleanHandle(handle);
+
   const attempts: Array<[string, Record<string, any>]> = [
     ["/instagram/user/info", { username }],
     ["/instagram/user/info", { name: username }],
@@ -143,17 +194,45 @@ async function resolveInstagramId(handle: string, externalId?: string | null) {
     ["/instagram/user/search", { name: username }],
   ];
 
-  let last = "";
+  let lastError = "";
+
   for (const [path, params] of attempts) {
     try {
-      const p = await ed(path, params);
-      const id = deepFind(p, ["pk", "user_id", "id"]);
+      const payload = await ed(path, params);
+      const id = deepFind(payload, ["pk", "user_id", "id"]);
       if (id) return String(id);
     } catch (e: any) {
-      last = String(e?.message || e);
+      lastError = String(e?.message || e);
     }
   }
-  throw new Error(last || "Could not resolve Instagram username");
+
+  throw new Error(lastError || "Could not resolve Instagram username");
+}
+
+async function resolveThreadsId(handle: string) {
+  const username = cleanHandle(handle);
+
+  const payload = await ed("/threads/user/search", {
+    name: username,
+  });
+
+  const candidates = chooseItems(payload);
+
+  const exact = candidates.find((item: any) => {
+    const node = item?.node || item;
+    return cleanHandle(str(node?.username)).toLowerCase() === username.toLowerCase();
+  });
+
+  const selected = exact || candidates[0];
+  const node = selected?.node || selected;
+
+  const id = str(node?.pk, node?.id, node?.user_id);
+
+  if (!id || !/^\d+$/.test(id)) {
+    throw new Error("Could not resolve Threads username to a numeric user ID");
+  }
+
+  return id;
 }
 
 async function resolveYouTubeBrowseId(account: SocialAccount) {
@@ -162,29 +241,57 @@ async function resolveYouTubeBrowseId(account: SocialAccount) {
 
   const handle = cleanHandle(account.handle);
   const key = process.env.YOUTUBE_API_KEY;
+
   if (!key) {
-    throw new Error("For YouTube, save a Channel ID (starts with UC) or keep YOUTUBE_API_KEY for handle resolution");
+    throw new Error(
+      "For YouTube, save a Channel ID or keep YOUTUBE_API_KEY for @handle resolution"
+    );
   }
 
-  const u = new URL("https://www.googleapis.com/youtube/v3/channels");
-  u.searchParams.set("part", "id");
-  u.searchParams.set("forHandle", handle);
-  u.searchParams.set("key", key);
-  const r = await fetch(u.toString(), { cache: "no-store" });
-  const j = await r.json();
-  const id = j?.items?.[0]?.id;
+  const url = new URL("https://www.googleapis.com/youtube/v3/channels");
+  url.searchParams.set("part", "id");
+  url.searchParams.set("forHandle", handle);
+  url.searchParams.set("key", key);
+
+  const response = await fetch(url.toString(), { cache: "no-store" });
+  const payload = await response.json();
+
+  const id = payload?.items?.[0]?.id;
   if (!id) throw new Error("Could not resolve YouTube handle");
+
   return String(id);
 }
 
-function normalizeTwitter(item: any, handle: string): NormalizedMention | null {
+function normalizeTwitter(
+  item: any,
+  handle: string
+): NormalizedMention | null {
   const legacy = item?.legacy || item?.tweet?.legacy || item;
-  const id = str(item?.rest_id, item?.id, item?.tweet?.rest_id, legacy?.id_str);
-  const content = str(legacy?.full_text, legacy?.text, item?.text, item?.content);
+
+  const id = str(
+    item?.rest_id,
+    item?.id,
+    item?.tweet?.rest_id,
+    legacy?.id_str
+  );
+
+  const content = str(
+    legacy?.full_text,
+    legacy?.text,
+    item?.text,
+    item?.content
+  );
+
   if (!id || !content) return null;
 
-  const user = item?.core?.user_results?.result?.legacy || item?.user || item?.author || {};
+  const user =
+    item?.core?.user_results?.result?.legacy ||
+    item?.user ||
+    item?.author ||
+    {};
+
   const username = str(user?.screen_name, user?.username, handle);
+
   return {
     platform: "X",
     external_id: `x:${id}`,
@@ -192,170 +299,536 @@ function normalizeTwitter(item: any, handle: string): NormalizedMention | null {
     author_username: username || null,
     content,
     post_url: username ? `https://x.com/${username}/status/${id}` : null,
-    published_at: iso(legacy?.created_at || item?.created_at || item?.timestamp),
-    likes: num(legacy?.favorite_count, item?.like_count, item?.likes),
-    shares: num(legacy?.retweet_count, item?.retweet_count, item?.shares),
-    replies: num(legacy?.reply_count, item?.reply_count, item?.replies),
-    views: num(item?.views?.count, legacy?.views, item?.view_count, item?.impressions),
+    published_at: iso(
+      legacy?.created_at,
+      item?.created_at,
+      item?.timestamp
+    ),
+    likes: num(
+      legacy?.favorite_count,
+      item?.like_count,
+      item?.likes
+    ),
+    shares: num(
+      legacy?.retweet_count,
+      item?.retweet_count,
+      item?.shares
+    ),
+    replies: num(
+      legacy?.reply_count,
+      item?.reply_count,
+      item?.replies
+    ),
+    views: num(
+      item?.views?.count,
+      legacy?.views,
+      item?.view_count,
+      item?.impressions
+    ),
   };
 }
 
-function normalizeTikTok(item: any, handle: string): NormalizedMention | null {
+function normalizeTikTok(
+  item: any,
+  handle: string
+): NormalizedMention | null {
   const id = str(item?.aweme_id, item?.id, item?.video_id);
-  const content = str(item?.desc, item?.description, item?.text, item?.title) || "[TikTok video]";
   if (!id) return null;
+
   const stats = item?.statistics || item?.stats || {};
   const author = item?.author || {};
-  const username = str(author?.unique_id, author?.uniqueId, author?.username, handle);
+  const username = str(
+    author?.unique_id,
+    author?.uniqueId,
+    author?.username,
+    handle
+  );
+
   return {
     platform: "TikTok",
     external_id: `tt:${id}`,
     author_name: str(author?.nickname, author?.name, username) || null,
     author_username: username || null,
-    content,
-    post_url: str(item?.share_url, item?.shareUrl) || (username ? `https://www.tiktok.com/@${username}/video/${id}` : null),
-    published_at: iso(item?.create_time || item?.createTime || item?.timestamp),
-    likes: num(stats?.digg_count, stats?.like_count, item?.like_count),
-    shares: num(stats?.share_count, item?.share_count),
-    replies: num(stats?.comment_count, item?.comment_count),
-    views: num(stats?.play_count, stats?.view_count, item?.view_count),
+    content:
+      str(item?.desc, item?.description, item?.text, item?.title) ||
+      "[TikTok video]",
+    post_url:
+      str(item?.share_url, item?.shareUrl) ||
+      (username
+        ? `https://www.tiktok.com/@${username}/video/${id}`
+        : null),
+    published_at: iso(
+      item?.create_time,
+      item?.createTime,
+      item?.timestamp
+    ),
+    likes: num(
+      stats?.digg_count,
+      stats?.like_count,
+      item?.like_count
+    ),
+    shares: num(
+      stats?.share_count,
+      item?.share_count
+    ),
+    replies: num(
+      stats?.comment_count,
+      item?.comment_count
+    ),
+    views: num(
+      stats?.play_count,
+      stats?.view_count,
+      item?.view_count
+    ),
   };
 }
 
-function normalizeInstagram(item: any, handle: string): NormalizedMention | null {
+function normalizeInstagram(
+  item: any,
+  handle: string
+): NormalizedMention | null {
   const id = str(item?.pk, item?.id, item?.media_id);
   const code = str(item?.code, item?.shortcode);
-  const caption =
-    str(item?.caption?.text, item?.caption_text, item?.caption, item?.text, item?.title) ||
-    "[Instagram post]";
+
   if (!id && !code) return null;
+
   const user = item?.user || item?.owner || {};
   const username = str(user?.username, handle);
+
   return {
     platform: "Instagram",
     external_id: `ig:${id || code}`,
     author_name: str(user?.full_name, user?.name, username) || null,
     author_username: username || null,
-    content: caption,
-    post_url: code ? `https://www.instagram.com/p/${code}/` : str(item?.permalink) || null,
-    published_at: iso(item?.taken_at || item?.taken_at_timestamp || item?.timestamp || item?.created_at),
+    content:
+      str(
+        item?.caption?.text,
+        item?.caption_text,
+        item?.caption,
+        item?.text,
+        item?.title
+      ) || "[Instagram post]",
+    post_url: code
+      ? `https://www.instagram.com/p/${code}/`
+      : str(item?.permalink) || null,
+    published_at: iso(
+      item?.taken_at,
+      item?.taken_at_timestamp,
+      item?.timestamp,
+      item?.created_at
+    ),
     likes: num(item?.like_count, item?.likes),
-    shares: num(item?.reshare_count, item?.share_count, item?.shares),
-    replies: num(item?.comment_count, item?.comments_count, item?.replies),
-    views: num(item?.play_count, item?.view_count, item?.video_view_count),
+    shares: num(
+      item?.reshare_count,
+      item?.share_count,
+      item?.shares
+    ),
+    replies: num(
+      item?.comment_count,
+      item?.comments_count,
+      item?.replies
+    ),
+    views: num(
+      item?.play_count,
+      item?.view_count,
+      item?.video_view_count
+    ),
   };
 }
 
-function normalizeThreads(item: any, handle: string): NormalizedMention | null {
-  const id = str(item?.pk, item?.id, item?.post_id);
-  const content = str(item?.caption?.text, item?.text, item?.caption, item?.description);
-  if (!id || !content) return null;
-  const user = item?.user || item?.author || {};
-  const username = str(user?.username, item?.username, handle);
+function normalizeThreads(
+  item: any,
+  handle: string
+): NormalizedMention | null {
+  const node = item?.node || item;
+  const id = str(node?.pk, node?.id, node?.post_id);
+
+  const content = str(
+    node?.caption?.text,
+    node?.text_post_app_info?.link_preview_attachment?.display_url,
+    node?.text,
+    node?.caption,
+    node?.description
+  );
+
+  if (!id) return null;
+
+  const user = node?.user || node?.author || {};
+  const username = str(user?.username, node?.username, handle);
+
   return {
     platform: "Threads",
     external_id: `threads:${id}`,
     author_name: str(user?.full_name, user?.name, username) || null,
     author_username: username || null,
-    content,
-    post_url: str(item?.permalink, item?.url) || null,
-    published_at: iso(item?.taken_at || item?.timestamp || item?.created_at),
-    likes: num(item?.like_count, item?.likes),
-    shares: num(item?.repost_count, item?.share_count, item?.shares),
-    replies: num(item?.reply_count, item?.comment_count, item?.replies),
-    views: num(item?.view_count, item?.views),
+    content: content || "[Threads post]",
+    post_url: str(node?.permalink, node?.url) || null,
+    published_at: iso(
+      node?.taken_at,
+      node?.timestamp,
+      node?.created_at
+    ),
+    likes: num(node?.like_count, node?.likes),
+    shares: num(
+      node?.repost_count,
+      node?.share_count,
+      node?.shares
+    ),
+    replies: num(
+      node?.reply_count,
+      node?.comment_count,
+      node?.replies
+    ),
+    views: num(
+      node?.view_count,
+      node?.views
+    ),
   };
 }
 
-function normalizeYouTube(item: any, handle: string): NormalizedMention | null {
+function normalizeYouTube(
+  item: any,
+  handle: string
+): NormalizedMention | null {
   const id = str(item?.videoId, item?.video_id, item?.id);
   if (!id) return null;
-  const title = str(item?.title?.runs?.[0]?.text, item?.title, item?.headline);
-  const description = str(item?.description, item?.shortDescription, item?.descriptionSnippet?.runs?.[0]?.text);
-  const content = [title, description].filter(Boolean).join("\n\n") || "[YouTube video]";
+
+  const title = str(
+    item?.title?.runs?.[0]?.text,
+    item?.title,
+    item?.headline
+  );
+
+  const description = str(
+    item?.description,
+    item?.shortDescription,
+    item?.descriptionSnippet?.runs?.[0]?.text
+  );
+
   return {
     platform: "YouTube",
     external_id: `yt:${id}`,
-    author_name: str(item?.channelTitle, item?.author, handle) || null,
+    author_name: str(
+      item?.channelTitle,
+      item?.author,
+      handle
+    ) || null,
     author_username: handle || null,
-    content,
+    content:
+      [title, description].filter(Boolean).join("\n\n") ||
+      "[YouTube video]",
     post_url: `https://www.youtube.com/watch?v=${id}`,
-    published_at: iso(item?.publishedTimeText?.simpleText || item?.publishedAt || item?.publish_date || item?.timestamp),
-    likes: num(item?.likeCount, item?.like_count, item?.likes),
-    shares: num(item?.share_count, item?.shares),
-    replies: num(item?.commentCount, item?.comment_count, item?.comments),
-    views: num(item?.viewCount, item?.view_count, item?.views, item?.viewCountText?.simpleText),
+    published_at: iso(
+      item?.publishedAt,
+      item?.publish_date,
+      item?.timestamp
+    ),
+    likes: num(
+      item?.likeCount,
+      item?.like_count,
+      item?.likes
+    ),
+    shares: num(
+      item?.share_count,
+      item?.shares
+    ),
+    replies: num(
+      item?.commentCount,
+      item?.comment_count,
+      item?.comments
+    ),
+    views: num(
+      item?.viewCount,
+      item?.view_count,
+      item?.views
+    ),
   };
 }
 
+function normalizeReddit(
+  item: any
+): NormalizedMention | null {
+  const x = item?.data && !item?.data?.posts ? item.data : item;
 
-function cleanSubreddit(value: string) { return String(value || "").trim().replace(/^https?:\/\/(www\.)?reddit\.com\/r\//i, "").replace(/^r\//i, "").replace(/\/.*$/, ""); }
-function normalizeReddit(item:any, subreddit:string): NormalizedMention | null { const x=item?.data && !item?.data?.posts ? item.data : item; const id=str(x?.id,x?.name); if(!id)return null; const content=[str(x?.title),str(x?.selftext,x?.body)].filter(Boolean).join("\n\n")||"[Reddit post]"; const per=str(x?.permalink); return {platform:"Reddit",external_id:`reddit:${id}`,author_name:str(x?.author)||null,author_username:str(x?.author)||null,content,post_url:per?`https://www.reddit.com${per}`:str(x?.url)||null,published_at:iso(x?.created_utc,x?.created),likes:num(x?.score,x?.ups),shares:num(x?.num_crossposts),replies:num(x?.num_comments),views:num(x?.view_count)}; }
-function normalizeSnapchat(item:any, handle:string): NormalizedMention | null { const id=str(item?.id,item?.snap_id,item?.story_id,item?.content_id); const content=str(item?.description,item?.title,item?.text,item?.caption); if(!id||!content)return null; return {platform:"Snapchat",external_id:`snap:${id}`,author_name:str(item?.display_name,item?.name,handle)||null,author_username:handle||null,content,post_url:str(item?.url,item?.share_url,item?.permalink)||null,published_at:iso(item?.timestamp,item?.created_at,item?.create_time),likes:num(item?.likes,item?.like_count),shares:num(item?.shares,item?.share_count),replies:num(item?.comments,item?.comment_count),views:num(item?.views,item?.view_count)}; }
+  const id = str(x?.id, x?.name);
+  if (!id) return null;
+
+  const title = str(x?.title);
+  const body = str(x?.selftext, x?.body);
+
+  const permalink = str(x?.permalink);
+
+  return {
+    platform: "Reddit",
+    external_id: `reddit:${id}`,
+    author_name: str(x?.author) || null,
+    author_username: str(x?.author) || null,
+    content:
+      [title, body].filter(Boolean).join("\n\n") ||
+      "[Reddit post]",
+    post_url: permalink
+      ? `https://www.reddit.com${permalink}`
+      : str(x?.url) || null,
+    published_at: iso(x?.created_utc, x?.created),
+    likes: num(x?.score, x?.ups),
+    shares: num(x?.num_crossposts),
+    replies: num(x?.num_comments),
+    views: num(x?.view_count),
+  };
+}
+
+function normalizeSnapchat(
+  item: any,
+  handle: string
+): NormalizedMention | null {
+  const id = str(
+    item?.id,
+    item?.snap_id,
+    item?.story_id,
+    item?.content_id
+  );
+
+  const content = str(
+    item?.description,
+    item?.title,
+    item?.text,
+    item?.caption
+  );
+
+  if (!id || !content) return null;
+
+  return {
+    platform: "Snapchat",
+    external_id: `snap:${id}`,
+    author_name:
+      str(item?.display_name, item?.name, handle) || null,
+    author_username: handle || null,
+    content,
+    post_url:
+      str(item?.url, item?.share_url, item?.permalink) || null,
+    published_at: iso(
+      item?.timestamp,
+      item?.created_at,
+      item?.create_time
+    ),
+    likes: num(item?.likes, item?.like_count),
+    shares: num(item?.shares, item?.share_count),
+    replies: num(item?.comments, item?.comment_count),
+    views: num(item?.views, item?.view_count),
+  };
+}
+
+function parseRedditTarget(value: string) {
+  const raw = String(value || "").trim();
+
+  const userMatch = raw.match(
+    /(?:reddit\.com\/)?user\/([^/?#]+)/i
+  );
+
+  if (userMatch?.[1]) {
+    return {
+      type: "user" as const,
+      value: userMatch[1],
+    };
+  }
+
+  const subredditMatch = raw.match(
+    /(?:reddit\.com\/)?r\/([^/?#]+)/i
+  );
+
+  if (subredditMatch?.[1]) {
+    return {
+      type: "subreddit" as const,
+      value: subredditMatch[1],
+    };
+  }
+
+  return {
+    type: "subreddit" as const,
+    value: raw
+      .replace(/^@/, "")
+      .replace(/^r\//i, "")
+      .replace(/\/.*$/, ""),
+  };
+}
+
+async function collectRedditUserPublic(username: string) {
+  const url =
+    `https://www.reddit.com/user/${encodeURIComponent(username)}/submitted.json` +
+    "?limit=25&raw_json=1";
+
+  const response = await fetch(url, {
+    headers: {
+      "User-Agent": "metriX-social-listening/1.0",
+      Accept: "application/json",
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Reddit public user feed returned ${response.status}`);
+  }
+
+  const payload = await response.json();
+  const children = payload?.data?.children;
+
+  return Array.isArray(children) ? children : [];
+}
 
 export async function collectFromEnsembleData(account: SocialAccount) {
   const platform = String(account.platform || "").toLowerCase();
   const handle = cleanHandle(account.handle);
+
   let payload: any;
   let items: any[] = [];
   let externalId: string | null = account.external_id || null;
 
   if (platform === "x") {
-    const id = await resolveTwitterId(handle);
-    externalId = id;
-    payload = await ed("/twitter/user/tweets", { id });
-    items = firstArray(payload);
-    return { externalId, mentions: items.map((x) => normalizeTwitter(x, handle)).filter(Boolean) as NormalizedMention[] };
+    externalId = await resolveTwitterId(handle);
+
+    payload = await ed("/twitter/user/tweets", {
+      id: externalId,
+    });
+
+    items = chooseItems(payload);
+
+    return {
+      externalId,
+      mentions: items
+        .map((x) => normalizeTwitter(x, handle))
+        .filter(Boolean) as NormalizedMention[],
+    };
   }
 
   if (platform === "tiktok") {
-    payload = await ed("/tt/user/posts", { username: handle, depth: 1 });
-    items = firstArray(payload);
-    return { externalId, mentions: items.map((x) => normalizeTikTok(x, handle)).filter(Boolean) as NormalizedMention[] };
+    payload = await ed("/tt/user/posts", {
+      username: handle,
+      depth: 1,
+    });
+
+    items = chooseItems(payload);
+
+    return {
+      externalId,
+      mentions: items
+        .map((x) => normalizeTikTok(x, handle))
+        .filter(Boolean) as NormalizedMention[],
+    };
   }
 
   if (platform === "threads") {
-    payload = await ed("/threads/user/posts", { id: handle, chunk_size: 10 });
-    items = firstArray(payload);
-    return { externalId, mentions: items.map((x) => normalizeThreads(x, handle)).filter(Boolean) as NormalizedMention[] };
+    externalId = await resolveThreadsId(handle);
+
+    payload = await ed("/threads/user/posts", {
+      id: externalId,
+      chunk_size: 10,
+    });
+
+    items = chooseItems(payload);
+
+    return {
+      externalId,
+      mentions: items
+        .map((x) => normalizeThreads(x, handle))
+        .filter(Boolean) as NormalizedMention[],
+    };
   }
 
   if (platform === "instagram") {
-    const id = await resolveInstagramId(handle, externalId);
-    externalId = id;
+    externalId = await resolveInstagramId(
+      handle,
+      externalId
+    );
+
     payload = await ed("/instagram/user/posts", {
-      user_id: id,
+      user_id: externalId,
       depth: 1,
       chunk_size: 10,
       start_cursor: "",
       alternative_method: false,
     });
-    items = firstArray(payload);
-    return { externalId, mentions: items.map((x) => normalizeInstagram(x, handle)).filter(Boolean) as NormalizedMention[] };
+
+    items = chooseItems(payload);
+
+    return {
+      externalId,
+      mentions: items
+        .map((x) => normalizeInstagram(x, handle))
+        .filter(Boolean) as NormalizedMention[],
+    };
   }
 
   if (platform === "youtube") {
-    const browseId = await resolveYouTubeBrowseId(account);
-    externalId = browseId;
-    payload = await ed("/youtube/channel/videos", { browseId, depth: 1 });
-    items = firstArray(payload);
-    return { externalId, mentions: items.map((x) => normalizeYouTube(x, handle)).filter(Boolean) as NormalizedMention[] };
+    externalId = await resolveYouTubeBrowseId(account);
+
+    payload = await ed("/youtube/channel/videos", {
+      browseId: externalId,
+      depth: 1,
+    });
+
+    items = chooseItems(payload);
+
+    return {
+      externalId,
+      mentions: items
+        .map((x) => normalizeYouTube(x, handle))
+        .filter(Boolean) as NormalizedMention[],
+    };
   }
 
-
   if (platform === "reddit") {
-    const subreddit = cleanSubreddit(account.handle);
-    if (!subreddit) throw new Error("Enter a subreddit, e.g. r/saudiarabia");
-    payload = await ed("/reddit/subreddit/posts", { name: subreddit, sort: "new", period: "hour", cursor: "" });
-    items = firstArray(payload);
-    return { externalId: subreddit, mentions: items.map((x) => normalizeReddit(x, subreddit)).filter(Boolean) as NormalizedMention[] };
+    const target = parseRedditTarget(account.handle);
+
+    if (!target.value) {
+      throw new Error(
+        "Enter a Reddit subreddit (r/name) or user profile URL"
+      );
+    }
+
+    if (target.type === "user") {
+      items = await collectRedditUserPublic(target.value);
+
+      return {
+        externalId: `user:${target.value}`,
+        mentions: items
+          .map((x) => normalizeReddit(x))
+          .filter(Boolean) as NormalizedMention[],
+      };
+    }
+
+    payload = await ed("/reddit/subreddit/posts", {
+      name: target.value,
+      sort: "new",
+      period: "hour",
+      cursor: "",
+    });
+
+    items = chooseItems(payload);
+
+    return {
+      externalId: `subreddit:${target.value}`,
+      mentions: items
+        .map((x) => normalizeReddit(x))
+        .filter(Boolean) as NormalizedMention[],
+    };
   }
 
   if (platform === "snapchat") {
-    payload = await ed("/snapchat/user/info", { name: handle });
-    items = firstArray(payload);
-    return { externalId, mentions: items.map((x) => normalizeSnapchat(x, handle)).filter(Boolean) as NormalizedMention[] };
+    payload = await ed("/snapchat/user/info", {
+      name: handle,
+    });
+
+    items = chooseItems(payload);
+
+    return {
+      externalId,
+      mentions: items
+        .map((x) => normalizeSnapchat(x, handle))
+        .filter(Boolean) as NormalizedMention[],
+    };
   }
 
-  throw new Error(`EnsembleData collector is not configured for ${platform}`);
+  throw new Error(
+    `EnsembleData collector is not configured for ${platform}`
+  );
 }
