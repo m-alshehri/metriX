@@ -1,58 +1,77 @@
-metriX — FULL UPDATE v4.2
+metriX — FULL UPDATE v5.0
 =========================
 
-This is a COMPLETE repository bundle.
+This is a COMPLETE repository replacement bundle.
 
-WHAT CHANGED
+IMPORTANT DEPLOYMENT ORDER
+--------------------------
+1) Supabase SQL Editor: run
+   supabase/metrix_v5_intelligence_upgrade.sql
+2) Only after SQL succeeds, replace the full GitHub repository contents with this bundle.
+3) Commit to main and let Vercel deploy.
+4) Keep the existing Vercel environment variables:
+   NEXT_PUBLIC_SUPABASE_URL
+   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+   SUPABASE_SECRET_KEY
+   OPENAI_API_KEY
+   CRON_SECRET
+   RESEND_API_KEY
+   ALERT_FROM_EMAIL
+   ENSEMBLEDATA_TOKEN
+   BRIGHTDATA_API_TOKEN
+   YOUTUBE_API_KEY (recommended)
+
+WHAT V5 ADDS
 ------------
-1) HOME PAGE
-- Rebuilt into a richer social-listening SaaS homepage inspired by the current structure and visual rhythm of leading products such as Brand24.
-- Uses original metriX copy and original UI; no Brand24 assets or copied page content.
-- New hero, analytics preview, platform strip, product cards, alert section, AI Insights section, sources section and Request a Demo section.
-- English and Arabic supported.
+- Smart mention upsert: existing posts refresh likes/shares/replies/views instead of being ignored.
+- Historical metric snapshots per mention (engagement growth over time).
+- Raw provider JSON storage for future extraction/recovery.
+- Media metadata, hashtags, @mentions, outbound URLs, content hash and quality status.
+- Duplicate protection using provider IDs plus content hashes for analytics support.
+- Language detection (Arabic / English / mixed / other).
+- AI sentiment confidence.
+- AI emotion classification + confidence.
+- Structured AI topics stored in the database.
+- Virality / content velocity score.
+- Fast-growing content section.
+- Account/author snapshots where providers expose follower/profile fields.
+- Influence score.
+- Daily project metrics and period-over-period comparison.
+- Daily AI executive summary.
+- Conversation-spike and negative-sentiment alerts.
+- Combined anomaly metadata for reputation monitoring.
+- Provider/account health history.
+- SaaS usage accounting for future plans and quotas.
+- Configurable retention period (default 365 days).
+- Automated retention cleanup.
+- Sync cursor/state fields and last successful sync tracking.
+- Failure counters + exponential retry scheduling metadata.
+- Persistent Bright Data snapshot IDs in provider_jobs.
+- Hourly retry cron for unfinished provider jobs.
+- Existing all-project daily cron remains exactly midnight Saudi time (21:00 UTC).
+- New intelligence dashboard cards: comparison, daily brief, topics, source health,
+  influential authors, usage and fastest-growing content.
 
-2) HEADER
-- Dashboard button removed from the public header.
-- If visitor is signed out: shows Login.
-- If visitor is signed in: shows Logout.
-- Start Free replaced with Request a demo.
-- Request a demo scrolls to the demo request form.
+CRON SCHEDULES
+--------------
+Daily all-project pipeline:
+  0 21 * * *   = 00:00 Saudi Arabia (UTC+3)
 
-3) REQUEST A DEMO FORM
-- New component: components/RequestDemoForm.tsx
-- New API route: app/api/request-demo/route.ts
-- Demo submissions are emailed to:
-  ma.alshehri@hotmail.com
-- Uses existing Vercel environment variables:
-  RESEND_API_KEY
-  ALERT_FROM_EMAIL
-- No extra package is required because the API calls Resend directly with fetch.
-- Reply-To is set to the visitor's submitted email.
-- Includes a simple honeypot field against basic form bots.
+Provider retry worker:
+  15 * * * *   = every hour at minute 15
 
-4) FOOTER
-- Footer background changed to:
-  #660066
+PROVIDER-LIMITED FEATURES
+-------------------------
+Backfill depth and cursor pagination are stored and supported by the metriX data model,
+but actual deep historical pagination depends on what each upstream provider endpoint
+returns. v5 does NOT invent undocumented endpoints. Current collectors continue using
+verified EnsembleData/Bright Data endpoints, while sync_cursor/backfill fields are ready
+for endpoint-specific pagination as documented provider cursors become available.
 
-5) SENTIMENT
-- Positive = green
-- Neutral = gray
-- Negative = red
-- Applied to project sentiment donut and legend.
-- Homepage dashboard preview uses the same sentiment color convention.
-
-DEPLOYMENT
-----------
-Replace the complete repository contents with this ZIP contents and deploy to Vercel.
-
-No new SQL is required for v4.2.
-
-IMPORTANT
----------
-The demo form requires the already-used email environment variables to exist in Vercel:
-RESEND_API_KEY
-ALERT_FROM_EMAIL
-
-ALERT_FROM_EMAIL must be a sender/domain that Resend has verified.
-
-This bundle also preserves the existing provider/backend fixes from v4.1.
+NOTES
+-----
+- Historical engagement begins accumulating from the first v5 run; past daily snapshots
+  cannot be reconstructed if the provider did not previously supply them.
+- Author follower/influence snapshots are populated only where raw provider data exposes
+  those fields.
+- Existing v4.3 homepage/header/footer/demo form and midnight Saudi cron are preserved.

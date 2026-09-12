@@ -16,7 +16,7 @@ export default async function AlertSettings({
   const { data: settings } = await supabase
     .from("project_settings")
     .select(
-      "automation_enabled,email_alerts_enabled,alert_email,negative_threshold,spike_multiplier"
+      "automation_enabled,email_alerts_enabled,alert_email,negative_threshold,spike_multiplier,retention_days,daily_summary_enabled,anomaly_alerts_enabled,comparison_window_days"
     )
     .eq("project_id", projectId)
     .maybeSingle();
@@ -25,6 +25,10 @@ export default async function AlertSettings({
   const emailAlertsEnabled = settings?.email_alerts_enabled ?? false;
   const negativeThreshold = settings?.negative_threshold ?? 40;
   const spikeMultiplier = settings?.spike_multiplier ?? 1.5;
+  const retentionDays = settings?.retention_days ?? 365;
+  const dailySummaryEnabled = settings?.daily_summary_enabled ?? true;
+  const anomalyAlertsEnabled = settings?.anomaly_alerts_enabled ?? true;
+  const comparisonWindowDays = settings?.comparison_window_days ?? 7;
 
   return (
     <section id="alert-settings" className="mt-10">
@@ -152,6 +156,22 @@ export default async function AlertSettings({
                   : "Used by the alert engine when spike detection is enabled."}
               </span>
             </label>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border p-4">
+              <input type="checkbox" name="daily_summary_enabled" defaultChecked={dailySummaryEnabled} className="mt-1 h-4 w-4" />
+              <span><span className="block font-black">{ar ? "الملخص التنفيذي اليومي" : "Daily executive summary"}</span><span className="mt-1 block text-sm leading-6 text-zinc-500">{ar ? "إنشاء ملخص AI يومي بعد اكتمال جمع البيانات." : "Generate a daily AI brief after collection completes."}</span></span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border p-4">
+              <input type="checkbox" name="anomaly_alerts_enabled" defaultChecked={anomalyAlertsEnabled} className="mt-1 h-4 w-4" />
+              <span><span className="block font-black">{ar ? "كشف الشذوذ والارتفاعات" : "Anomaly & spike detection"}</span><span className="mt-1 block text-sm leading-6 text-zinc-500">{ar ? "تنبيه عند الارتفاع غير المعتاد أو تغير السلبية." : "Alert on unusual volume or sentiment shifts."}</span></span>
+            </label>
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-2">
+            <label className="block"><span className="text-sm font-black">{ar ? "مدة الاحتفاظ بالبيانات (يوم)" : "Data retention (days)"}</span><input type="number" name="retention_days" min="30" max="3650" defaultValue={retentionDays} className="mt-2 w-full rounded-2xl border bg-white px-4 py-3" /><span className="mt-2 block text-xs text-zinc-500">{ar ? "الافتراضي 365 يوماً. القيم القديمة تُحذف آلياً." : "Default 365 days. Older records are automatically removed."}</span></label>
+            <label className="block"><span className="text-sm font-black">{ar ? "نافذة المقارنة (يوم)" : "Comparison window (days)"}</span><input type="number" name="comparison_window_days" min="1" max="90" defaultValue={comparisonWindowDays} className="mt-2 w-full rounded-2xl border bg-white px-4 py-3" /><span className="mt-2 block text-xs text-zinc-500">{ar ? "تستخدم لمقارنة الأداء بالفترة السابقة." : "Used for period-over-period performance comparison."}</span></label>
           </div>
 
           <div className="flex justify-end">

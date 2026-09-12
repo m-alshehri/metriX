@@ -12,6 +12,7 @@ import ProjectAIInsights from "@/components/ProjectAIInsights";
 import AlertSettings from "@/components/AlertSettings";
 import AlertsCenter from "@/components/AlertsCenter";
 import PlatformIcon from "@/components/PlatformIcon";
+import AdvancedIntelligenceV5 from "@/components/AdvancedIntelligenceV5";
 
 export default async function ProjectPage({
   params,
@@ -112,6 +113,7 @@ export default async function ProjectPage({
         </div>
 
         <ProjectDashboard mentions={ms as any[]} locale={locale} />
+        <AdvancedIntelligenceV5 projectId={params.id} locale={locale} />
 
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
           <details className="rounded-[1.6rem] border bg-white p-5 shadow-sm">

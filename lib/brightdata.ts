@@ -12,6 +12,7 @@ export type BrightMention = {
   shares: number;
   replies: number;
   views: number;
+  raw_data?: any;
 };
 
 const API = "https://api.brightdata.com/datasets/v3";
@@ -137,8 +138,8 @@ async function parseResponse(response: Response) {
 }
 
 async function getSnapshot(token: string, snapshotId: string) {
-  // Poll up to ~50 seconds so Vercel has more time to receive Bright Data jobs.
-  for (let attempt = 0; attempt < 20; attempt++) {
+  // Poll briefly; metriX persists the snapshot id and resumes it on later retry runs so Vercel has more time to receive Bright Data jobs.
+  for (let attempt = 0; attempt < 3; attempt++) {
     const progress = await fetch(
       `${API}/progress/${encodeURIComponent(snapshotId)}`,
       {
@@ -184,7 +185,7 @@ async function getSnapshot(token: string, snapshotId: string) {
       throw new Error(`Bright Data snapshot ${snapshotId} failed`);
     }
 
-    await sleep(2500);
+    await sleep(2000);
   }
 
   throw new Error(
@@ -304,6 +305,7 @@ export async function collectFacebook(target: string) {
           x.play_count,
           x.views
         ),
+        raw_data: x,
       };
     })
     .filter((x: BrightMention) => x.external_id !== "fb:");
@@ -383,6 +385,7 @@ export async function collectLinkedIn(target: string) {
           x.views,
           x.impressions
         ),
+        raw_data: x,
       };
     })
     .filter((x: BrightMention) => x.external_id !== "li:");
@@ -473,6 +476,7 @@ export async function collectGoogleMapsReviews(target: string) {
             ? 1
             : n(x.replies),
         views: 0,
+        raw_data: x,
       };
     })
     .filter((x: BrightMention) => x.external_id !== "gm:");
@@ -481,4 +485,59 @@ export async function collectGoogleMapsReviews(target: string) {
     externalId: null,
     mentions,
   };
+}
+
+// Resume a previously-created Bright Data snapshot instead of starting a new job.
+// This is used by metriX provider_jobs persistence.
+export async function resumeBrightDataSnapshot(snapshotId: string, platform: string, target: string) {
+  const token = process.env.BRIGHTDATA_API_TOKEN;
+  if (!token) throw new Error("BRIGHTDATA_API_TOKEN is missing");
+  const rows = await getSnapshot(token, snapshotId);
+  const p = String(platform || "").toLowerCase();
+
+  if (p === "facebook") {
+    const mentions: BrightMention[] = rows.filter((x:any)=>x && !x.error).map((x:any) => {
+      const id=s(x.post_id,x.shortcode,x.id,x.url); return {
+        platform:"Facebook", external_id:`fb:${id}`,
+        author_name:s(x.page_name,x.user_name,x.user_username_raw,x.profile_handle)||null,
+        author_username:s(x.profile_handle,x.user_username_raw)||null,
+        content:s(x.content,x.text,x.description)||"[Facebook post]", post_url:s(x.url)||null,
+        published_at:iso(x.date_posted,x.created_at,x.timestamp),
+        likes:n(x.likes,x.num_likes_type?.num,x.reactions), shares:n(x.num_shares,x.shares),
+        replies:n(x.num_comments,x.comments), views:n(x.video_view_count,x.play_count,x.views), raw_data:x
+      };
+    }).filter((x:BrightMention)=>x.external_id!=="fb:");
+    return { externalId:null, mentions };
+  }
+
+  if (p === "linkedin") {
+    const mentions: BrightMention[] = rows.filter((x:any)=>x && !x.error).map((x:any) => {
+      const id=s(x.id,x.post_id,x.activity_id,x.url); return {
+        platform:"LinkedIn", external_id:`li:${id}`,
+        author_name:s(x.user_name,x.author_name,x.name,x.headline)||null,
+        author_username:s(x.user_url,x.use_url,x.author_url)||null,
+        content:s(x.post_text,x.text,x.description,x.title,x.headline)||"[LinkedIn post]", post_url:s(x.url)||null,
+        published_at:iso(x.date_posted,x.published_at,x.timestamp), likes:n(x.num_likes,x.likes),
+        shares:n(x.num_reposts,x.num_shares,x.shares), replies:n(x.num_comments,x.comments),
+        views:n(x.views,x.impressions), raw_data:x
+      };
+    }).filter((x:BrightMention)=>x.external_id!=="li:");
+    return { externalId:null, mentions };
+  }
+
+  if (p === "google_maps") {
+    const url=String(target||"").trim();
+    const mentions: BrightMention[] = rows.filter((x:any)=>x && !x.error).map((x:any) => {
+      const rating=n(x.rating,x.review_rating,x.stars);
+      const id=s(x.review_id,x.id,x.review_url,`${x.reviewer_name||"reviewer"}:${x.timestamp||x.review_date||""}`);
+      const text=s(x.review_text,x.text,x.review,x.comment)||(rating?`${rating}/5 Google Maps rating`:"[Google Maps review]");
+      return { platform:"Google Maps", external_id:`gm:${id}`, author_name:s(x.reviewer_name,x.author_name,x.name)||null,
+        author_username:s(x.reviewer_url,x.author_url)||null, content:rating?`[Rating: ${rating}/5] ${text}`:text,
+        post_url:s(x.review_url,x.url)||url, published_at:iso(x.review_date,x.date,x.timestamp,x.date_posted),
+        likes:n(x.review_likes,x.likes), shares:0, replies:x.owner_answer?1:n(x.replies), views:0, raw_data:x };
+    }).filter((x:BrightMention)=>x.external_id!=="gm:");
+    return { externalId:null, mentions };
+  }
+
+  throw new Error(`Unsupported Bright Data resume platform: ${platform}`);
 }

@@ -23,6 +23,10 @@ export type NormalizedMention = {
   shares: number;
   replies: number;
   views: number;
+  raw_data?: any;
+  media_type?: string | null;
+  media_url?: string | null;
+  thumbnail_url?: string | null;
 };
 
 function cleanHandle(value: string) {
@@ -735,6 +739,12 @@ async function collectRedditUserPublic(username: string) {
   });
 }
 
+function attachRaw<T extends NormalizedMention | null>(m: T, raw: any): T {
+  if (!m) return m;
+  (m as NormalizedMention).raw_data = raw;
+  return m;
+}
+
 export async function collectFromEnsembleData(account: SocialAccount) {
   const platform = String(account.platform || "").toLowerCase();
   const handle = cleanHandle(account.handle);
@@ -755,7 +765,7 @@ export async function collectFromEnsembleData(account: SocialAccount) {
     return {
       externalId,
       mentions: items
-        .map((x) => normalizeTwitter(x, handle))
+        .map((x) => attachRaw(normalizeTwitter(x, handle), x))
         .filter(Boolean) as NormalizedMention[],
     };
   }
@@ -771,7 +781,7 @@ export async function collectFromEnsembleData(account: SocialAccount) {
     return {
       externalId,
       mentions: items
-        .map((x) => normalizeTikTok(x, handle))
+        .map((x) => attachRaw(normalizeTikTok(x, handle), x))
         .filter(Boolean) as NormalizedMention[],
     };
   }
@@ -789,7 +799,7 @@ export async function collectFromEnsembleData(account: SocialAccount) {
     return {
       externalId,
       mentions: items
-        .map((x) => normalizeThreads(x, handle))
+        .map((x) => attachRaw(normalizeThreads(x, handle), x))
         .filter(Boolean) as NormalizedMention[],
     };
   }
@@ -813,7 +823,7 @@ export async function collectFromEnsembleData(account: SocialAccount) {
     return {
       externalId,
       mentions: items
-        .map((x) => normalizeInstagram(x, handle))
+        .map((x) => attachRaw(normalizeInstagram(x, handle), x))
         .filter(Boolean) as NormalizedMention[],
     };
   }
@@ -831,7 +841,7 @@ export async function collectFromEnsembleData(account: SocialAccount) {
     return {
       externalId,
       mentions: items
-        .map((x) => normalizeYouTube(x, handle))
+        .map((x) => attachRaw(normalizeYouTube(x, handle), x))
         .filter(Boolean) as NormalizedMention[],
     };
   }
@@ -851,7 +861,7 @@ export async function collectFromEnsembleData(account: SocialAccount) {
       return {
         externalId: `user:${target.value}`,
         mentions: items
-          .map((x) => normalizeReddit(x))
+          .map((x) => attachRaw(normalizeReddit(x), x))
           .filter(Boolean) as NormalizedMention[],
       };
     }
@@ -868,7 +878,7 @@ export async function collectFromEnsembleData(account: SocialAccount) {
     return {
       externalId: `subreddit:${target.value}`,
       mentions: items
-        .map((x) => normalizeReddit(x))
+        .map((x) => attachRaw(normalizeReddit(x), x))
         .filter(Boolean) as NormalizedMention[],
     };
   }
@@ -883,7 +893,7 @@ export async function collectFromEnsembleData(account: SocialAccount) {
     return {
       externalId,
       mentions: items
-        .map((x) => normalizeSnapchat(x, handle))
+        .map((x) => attachRaw(normalizeSnapchat(x, handle), x))
         .filter(Boolean) as NormalizedMention[],
     };
   }

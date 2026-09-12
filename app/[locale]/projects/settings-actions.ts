@@ -43,6 +43,10 @@ export async function saveAlertSettings(formData: FormData) {
     clampNumber(formData.get("negative_threshold"), 1, 100, 40)
   );
   const spikeMultiplier = clampNumber(formData.get("spike_multiplier"), 1, 10, 1.5);
+  const retentionDays = Math.round(clampNumber(formData.get("retention_days"), 30, 3650, 365));
+  const dailySummaryEnabled = asBool(formData.get("daily_summary_enabled"));
+  const anomalyAlertsEnabled = asBool(formData.get("anomaly_alerts_enabled"));
+  const comparisonWindowDays = Math.round(clampNumber(formData.get("comparison_window_days"), 1, 90, 7));
 
   const alertEmail =
     emailAlertsEnabled && alertEmailRaw.length > 0 ? alertEmailRaw : null;
@@ -58,6 +62,10 @@ export async function saveAlertSettings(formData: FormData) {
         alert_email: alertEmail,
         negative_threshold: negativeThreshold,
         spike_multiplier: spikeMultiplier,
+        retention_days: retentionDays,
+        daily_summary_enabled: dailySummaryEnabled,
+        anomaly_alerts_enabled: anomalyAlertsEnabled,
+        comparison_window_days: comparisonWindowDays,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "project_id" }
