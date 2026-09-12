@@ -147,26 +147,49 @@ export default function SocialAccounts({
 
   function statusBadge(platform: Platform) {
     const s = statuses[platform];
+    const raw = String(s?.last_sync_status || "");
 
-    if (!s?.last_sync_status) return null;
+    if (!raw) return null;
 
-    const ok = s.last_sync_status === "success";
+    if (raw.startsWith("success:")) {
+      const parts = raw.split(":");
+      const fetched = Number(parts[1] || 0);
+      const imported = Number(parts[2] || 0);
+
+      return (
+        <div className="mt-2 text-xs font-bold text-emerald-700">
+          {ar
+            ? `✓ تمت المزامنة · ${fetched} عنصر (${imported} جديد)`
+            : `✓ Synced · ${fetched} items (${imported} new)`}
+        </div>
+      );
+    }
+
+    if (raw === "success") {
+      return (
+        <div className="mt-2 text-xs font-bold text-emerald-700">
+          {ar ? "✓ تمت المزامنة" : "✓ Synced"}
+        </div>
+      );
+    }
+
+    if (raw === "no_data") {
+      return (
+        <div className="mt-2 text-xs font-bold text-amber-700">
+          {ar ? "لم يُرجع المزود بيانات قابلة للاستخدام" : "No data returned"}
+          {s.last_sync_error ? (
+            <div className="mt-1 font-normal text-zinc-500">
+              {String(s.last_sync_error).slice(0, 240)}
+            </div>
+          ) : null}
+        </div>
+      );
+    }
 
     return (
-      <div
-        className={`mt-2 text-xs font-bold ${
-          ok ? "text-emerald-700" : "text-red-600"
-        }`}
-      >
-        {ok
-          ? ar
-            ? "✓ تمت المزامنة"
-            : "✓ Synced"
-          : ar
-            ? "تعذر آخر تحديث"
-            : "Last sync failed"}
-
-        {!ok && s.last_sync_error ? (
+      <div className="mt-2 text-xs font-bold text-red-600">
+        {ar ? "تعذر آخر تحديث" : "Last sync failed"}
+        {s.last_sync_error ? (
           <div className="mt-1 font-normal text-zinc-500">
             {String(s.last_sync_error).slice(0, 240)}
           </div>
