@@ -34,8 +34,8 @@ function n(...values: any[]) {
   for (const v of values) {
     if (v === 0) return 0;
     if (v !== undefined && v !== null && v !== "") {
-      const num = Number(String(v).replace(/,/g, ""));
-      if (Number.isFinite(num)) return num;
+      const x = Number(String(v).replace(/,/g, ""));
+      if (Number.isFinite(x)) return x;
     }
   }
   return 0;
@@ -44,14 +44,17 @@ function n(...values: any[]) {
 function iso(...values: any[]) {
   for (const value of values) {
     if (value === undefined || value === null || value === "") continue;
+
     if (typeof value === "number" || /^\d+$/.test(String(value))) {
       const x = Number(value);
       const d = new Date(x > 100000000000 ? x : x * 1000);
       if (!Number.isNaN(d.getTime())) return d.toISOString();
     }
+
     const d = new Date(value);
     if (!Number.isNaN(d.getTime())) return d.toISOString();
   }
+
   return new Date().toISOString();
 }
 
@@ -62,18 +65,22 @@ function sleep(ms: number) {
 function canonicalFacebook(value: string) {
   let v = String(value || "").trim();
   if (!v) throw new Error("Facebook page URL or username is required");
+
   if (!/^https?:\/\//i.test(v)) {
     v = `https://www.facebook.com/${v.replace(/^@/, "").replace(/^facebook\.com\//i, "")}`;
   }
+
   const u = new URL(v);
-  const p = u.pathname.split("/").filter(Boolean);
-  if (!p[0]) throw new Error("Invalid Facebook page URL");
-  return `https://www.facebook.com/${p[0]}`;
+  const parts = u.pathname.split("/").filter(Boolean);
+  if (!parts[0]) throw new Error("Invalid Facebook page URL");
+
+  return `https://www.facebook.com/${parts[0]}`;
 }
 
 function canonicalLinkedIn(value: string) {
   let v = String(value || "").trim();
   if (!v) throw new Error("LinkedIn company/profile URL is required");
+
   if (!/^https?:\/\//i.test(v)) {
     v = v.replace(/^@/, "").replace(/^linkedin\.com\//i, "");
     v = v.startsWith("company/") || v.startsWith("in/")
@@ -82,87 +89,112 @@ function canonicalLinkedIn(value: string) {
   }
 
   const u = new URL(v);
-  const p = u.pathname.split("/").filter(Boolean);
-  const company = p.indexOf("company");
-  if (company >= 0 && p[company + 1]) {
-    return `https://www.linkedin.com/company/${p[company + 1]}`;
+  const parts = u.pathname.split("/").filter(Boolean);
+
+  const companyIndex = parts.indexOf("company");
+  if (companyIndex >= 0 && parts[companyIndex + 1]) {
+    return `https://www.linkedin.com/company/${parts[companyIndex + 1]}`;
   }
-  const profile = p.indexOf("in");
-  if (profile >= 0 && p[profile + 1]) {
-    return `https://www.linkedin.com/in/${p[profile + 1]}`;
+
+  const profileIndex = parts.indexOf("in");
+  if (profileIndex >= 0 && parts[profileIndex + 1]) {
+    return `https://www.linkedin.com/in/${parts[profileIndex + 1]}`;
   }
+
   throw new Error("Use a canonical LinkedIn company or profile URL");
 }
 
-function explainBrightDataError(status: number, raw: string) {
+function explain(status: number, raw: string) {
   if (/customer is not active/i.test(raw)) {
     return new Error(
-      "Bright Data account is not active. Activate Web Scraper API/billing, then run the pipeline again."
+      "Bright Data account is not active. Activate Web Scraper API/billing in Bright Data."
     );
   }
+
   if (/invalid input/i.test(raw)) {
     return new Error(
-      "Bright Data rejected the target URL. Use the canonical public page/profile/place URL."
+      "Bright Data rejected the target URL/input. Check the saved URL and try again."
     );
   }
+
   return new Error(raw || `Bright Data ${status}`);
 }
 
-async function readJsonResponse(response: Response) {
+async function parseResponse(response: Response) {
   const text = await response.text();
+
   try {
-    return { payload: JSON.parse(text), text };
+    return {
+      payload: JSON.parse(text),
+      text,
+    };
   } catch {
-    return { payload: null, text };
+    return {
+      payload: null,
+      text,
+    };
   }
 }
 
-async function downloadSnapshot(token: string, snapshotId: string) {
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const progress = await fetch(`${API}/progress/${snapshotId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
+async function getSnapshot(token: string, snapshotId: string) {
+  // Poll up to ~50 seconds so Vercel has more time to receive Bright Data jobs.
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const progress = await fetch(
+      `${API}/progress/${encodeURIComponent(snapshotId)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: "no-store",
+      }
+    );
 
-    const { payload, text } = await readJsonResponse(progress);
-    if (!progress.ok) throw explainBrightDataError(progress.status, text);
+    const { payload, text } = await parseResponse(progress);
+
+    if (!progress.ok) {
+      throw explain(progress.status, text);
+    }
 
     const status = String(payload?.status || "").toLowerCase();
+
     if (status === "ready") {
       const result = await fetch(
-        `${API}/snapshot/${snapshotId}?format=json`,
+        `${API}/snapshot/${encodeURIComponent(snapshotId)}?format=json`,
         {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
           cache: "no-store",
         }
       );
 
-      const parsed = await readJsonResponse(result);
-      if (!result.ok) throw explainBrightDataError(result.status, parsed.text);
+      const parsed = await parseResponse(result);
 
-      return Array.isArray(parsed.payload)
-        ? parsed.payload
-        : Array.isArray(parsed.payload?.data)
-          ? parsed.payload.data
-          : [];
+      if (!result.ok) {
+        throw explain(result.status, parsed.text);
+      }
+
+      if (Array.isArray(parsed.payload)) return parsed.payload;
+      if (Array.isArray(parsed.payload?.data)) return parsed.payload.data;
+
+      return [];
     }
 
     if (status === "failed") {
       throw new Error(`Bright Data snapshot ${snapshotId} failed`);
     }
 
-    await sleep(3000);
+    await sleep(2500);
   }
 
   throw new Error(
-    "Bright Data collection is still processing. Run the pipeline again shortly."
+    `Bright Data is still processing snapshot ${snapshotId}. Run Full Pipeline again shortly.`
   );
 }
 
 async function scrape(
   datasetId: string,
-  input: Record<string, any>[],
-  extraQuery?: Record<string, string>
+  input: Record<string, any>[]
 ) {
   const token = process.env.BRIGHTDATA_API_TOKEN;
   if (!token) throw new Error("BRIGHTDATA_API_TOKEN is missing");
@@ -170,11 +202,6 @@ async function scrape(
   const url = new URL(`${API}/scrape`);
   url.searchParams.set("dataset_id", datasetId);
   url.searchParams.set("include_errors", "true");
-  url.searchParams.set("format", "json");
-
-  for (const [k, v] of Object.entries(extraQuery || {})) {
-    url.searchParams.set(k, v);
-  }
 
   const response = await fetch(url.toString(), {
     method: "POST",
@@ -186,126 +213,272 @@ async function scrape(
     cache: "no-store",
   });
 
-  const { payload, text } = await readJsonResponse(response);
+  const { payload, text } = await parseResponse(response);
 
-  if (response.status === 202) {
-    const snapshotId = s(payload?.snapshot_id, payload?.id);
-    if (!snapshotId) throw new Error("Bright Data returned 202 without snapshot_id");
-    return await downloadSnapshot(token, snapshotId);
-  }
-
-  if (!response.ok) throw explainBrightDataError(response.status, text);
-
-  if (payload?.error) {
-    throw explainBrightDataError(response.status, s(payload.error, payload.message));
+  if (!response.ok) {
+    throw explain(response.status, text);
   }
 
   if (Array.isArray(payload)) return payload;
+
+  const snapshotId = s(
+    payload?.snapshot_id,
+    payload?.id,
+    payload?.snapshot?.id
+  );
+
+  if (snapshotId) {
+    return await getSnapshot(token, snapshotId);
+  }
+
+  if (payload?.error) {
+    throw explain(response.status, s(payload.error, payload.message));
+  }
+
   if (Array.isArray(payload?.data)) return payload.data;
+
   return [];
 }
 
 export async function collectFacebook(target: string) {
   const url = canonicalFacebook(target);
-  const rows = await scrape(DATASETS.facebook, [{ url }]);
 
-  const mentions: BrightMention[] = rows
-    .filter((x: any) => x && !x.error)
-    .map((x: any) => {
-      const id = s(x.post_id, x.shortcode, x.id, x.url);
-      return {
-        platform: "Facebook",
-        external_id: `fb:${id}`,
-        author_name: s(x.page_name, x.user_name, x.user_username_raw, x.profile_handle) || null,
-        author_username: s(x.profile_handle, x.user_username_raw) || null,
-        content: s(x.content, x.text, x.description) || "[Facebook post]",
-        post_url: s(x.url) || null,
-        published_at: iso(x.date_posted, x.created_at, x.timestamp),
-        likes: n(x.likes, x.num_likes_type?.num, x.reactions),
-        shares: n(x.num_shares, x.shares),
-        replies: n(x.num_comments, x.comments),
-        views: n(x.video_view_count, x.play_count, x.views),
-      };
-    })
-    .filter((x: BrightMention) => !!x.external_id && x.external_id !== "fb:");
-
-  return { externalId: null, mentions };
-}
-
-export async function collectLinkedIn(target: string) {
-  const url = canonicalLinkedIn(target);
-  const isProfile = /linkedin\.com\/in\//i.test(url);
-
+  // Bright Data's Facebook Page Posts dataset expects only the page URL.
   const rows = await scrape(
-    DATASETS.linkedin,
-    [{ url, only_authored_posts: true }],
-    {
-      type: "discover_new",
-      discover_by: isProfile ? "profile_url" : "company_url",
-    }
+    DATASETS.facebook,
+    [{ url }]
   );
 
   const mentions: BrightMention[] = rows
     .filter((x: any) => x && !x.error)
     .map((x: any) => {
-      const id = s(x.id, x.post_id, x.activity_id, x.url);
+      const id = s(
+        x.post_id,
+        x.shortcode,
+        x.id,
+        x.url
+      );
+
       return {
-        platform: "LinkedIn",
-        external_id: `li:${id}`,
-        author_name: s(x.user_name, x.author_name, x.name, x.headline) || null,
-        author_username: s(x.user_url, x.author_url) || null,
-        content: s(x.post_text, x.text, x.description, x.title, x.headline) || "[LinkedIn post]",
+        platform: "Facebook",
+        external_id: `fb:${id}`,
+        author_name:
+          s(
+            x.page_name,
+            x.user_name,
+            x.user_username_raw,
+            x.profile_handle
+          ) || null,
+        author_username:
+          s(
+            x.profile_handle,
+            x.user_username_raw
+          ) || null,
+        content:
+          s(
+            x.content,
+            x.text,
+            x.description
+          ) || "[Facebook post]",
         post_url: s(x.url) || null,
-        published_at: iso(x.date_posted, x.published_at, x.timestamp),
-        likes: n(x.num_likes, x.likes),
-        shares: n(x.num_reposts, x.num_shares, x.shares),
-        replies: n(x.num_comments, x.comments),
-        views: n(x.views, x.impressions),
+        published_at: iso(
+          x.date_posted,
+          x.created_at,
+          x.timestamp
+        ),
+        likes: n(
+          x.likes,
+          x.num_likes_type?.num,
+          x.reactions
+        ),
+        shares: n(
+          x.num_shares,
+          x.shares
+        ),
+        replies: n(
+          x.num_comments,
+          x.comments
+        ),
+        views: n(
+          x.video_view_count,
+          x.play_count,
+          x.views
+        ),
       };
     })
-    .filter((x: BrightMention) => !!x.external_id && x.external_id !== "li:");
+    .filter((x: BrightMention) => x.external_id !== "fb:");
 
-  return { externalId: null, mentions };
+  return {
+    externalId: null,
+    mentions,
+  };
 }
 
-export async function collectGoogleMapsReviews(target: string) {
-  const url = String(target || "").trim();
-  if (!/^https?:\/\//i.test(url)) {
-    throw new Error("Google Maps requires a full public Google Maps place URL");
-  }
+export async function collectLinkedIn(target: string) {
+  const url = canonicalLinkedIn(target);
 
-  const rows = await scrape(DATASETS.googleMaps, [
-    { url, days_limit: 90, sort_by: "Newest" },
-  ]);
+  // IMPORTANT:
+  // Bright Data's current Discover Posts by Company/Profile URL API expects
+  // an input object with URL (+ optional dates). Do not send
+  // only_authored_posts/type/discover_by; those caused "Invalid input".
+  const rows = await scrape(
+    DATASETS.linkedin,
+    [{ url }]
+  );
 
   const mentions: BrightMention[] = rows
     .filter((x: any) => x && !x.error)
     .map((x: any) => {
-      const rating = n(x.rating, x.review_rating, x.stars);
+      const id = s(
+        x.id,
+        x.post_id,
+        x.activity_id,
+        x.url
+      );
+
+      return {
+        platform: "LinkedIn",
+        external_id: `li:${id}`,
+        author_name:
+          s(
+            x.user_name,
+            x.author_name,
+            x.name,
+            x.headline
+          ) || null,
+        author_username:
+          s(
+            x.user_url,
+            x.use_url,
+            x.author_url
+          ) || null,
+        content:
+          s(
+            x.post_text,
+            x.text,
+            x.description,
+            x.title,
+            x.headline
+          ) || "[LinkedIn post]",
+        post_url: s(x.url) || null,
+        published_at: iso(
+          x.date_posted,
+          x.published_at,
+          x.timestamp
+        ),
+        likes: n(
+          x.num_likes,
+          x.likes
+        ),
+        shares: n(
+          x.num_reposts,
+          x.num_shares,
+          x.shares
+        ),
+        replies: n(
+          x.num_comments,
+          x.comments
+        ),
+        views: n(
+          x.views,
+          x.impressions
+        ),
+      };
+    })
+    .filter((x: BrightMention) => x.external_id !== "li:");
+
+  return {
+    externalId: null,
+    mentions,
+  };
+}
+
+export async function collectGoogleMapsReviews(target: string) {
+  const url = String(target || "").trim();
+
+  if (!/^https?:\/\//i.test(url)) {
+    throw new Error(
+      "Google Maps requires a full public Google Maps place URL"
+    );
+  }
+
+  // Keep the request body minimal so Bright Data validates it reliably.
+  const rows = await scrape(
+    DATASETS.googleMaps,
+    [{ url }]
+  );
+
+  const mentions: BrightMention[] = rows
+    .filter((x: any) => x && !x.error)
+    .map((x: any) => {
+      const rating = n(
+        x.rating,
+        x.review_rating,
+        x.stars
+      );
+
       const id = s(
         x.review_id,
         x.id,
+        x.review_url,
         `${x.reviewer_name || "reviewer"}:${x.timestamp || x.review_date || ""}`
       );
+
       const text =
-        s(x.review_text, x.text, x.review, x.comment) ||
-        (rating ? `${rating}/5 Google Maps rating` : "[Google Maps review]");
+        s(
+          x.review_text,
+          x.text,
+          x.review,
+          x.comment
+        ) ||
+        (rating
+          ? `${rating}/5 Google Maps rating`
+          : "[Google Maps review]");
 
       return {
         platform: "Google Maps",
         external_id: `gm:${id}`,
-        author_name: s(x.reviewer_name, x.author_name, x.name) || null,
-        author_username: s(x.reviewer_url, x.author_url) || null,
-        content: rating ? `[Rating: ${rating}/5] ${text}` : text,
-        post_url: s(x.review_url, x.url) || url,
-        published_at: iso(x.review_date, x.date, x.timestamp, x.date_posted),
-        likes: n(x.review_likes, x.likes),
+        author_name:
+          s(
+            x.reviewer_name,
+            x.author_name,
+            x.name
+          ) || null,
+        author_username:
+          s(
+            x.reviewer_url,
+            x.author_url
+          ) || null,
+        content: rating
+          ? `[Rating: ${rating}/5] ${text}`
+          : text,
+        post_url:
+          s(
+            x.review_url,
+            x.url
+          ) || url,
+        published_at: iso(
+          x.review_date,
+          x.date,
+          x.timestamp,
+          x.date_posted
+        ),
+        likes: n(
+          x.review_likes,
+          x.likes
+        ),
         shares: 0,
-        replies: x.owner_answer ? 1 : n(x.replies),
+        replies:
+          x.owner_answer
+            ? 1
+            : n(x.replies),
         views: 0,
       };
     })
-    .filter((x: BrightMention) => !!x.external_id && x.external_id !== "gm:");
+    .filter((x: BrightMention) => x.external_id !== "gm:");
 
-  return { externalId: null, mentions };
+  return {
+    externalId: null,
+    mentions,
+  };
 }

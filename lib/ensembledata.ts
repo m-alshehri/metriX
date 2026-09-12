@@ -717,10 +717,13 @@ function parseRedditTarget(value: string) {
 }
 
 async function collectRedditUserPublic(username: string) {
+  // EnsembleData has no documented Reddit user-posts endpoint.
+  // Use its documented keyword search endpoint and filter by exact author.
+  // "relevance" + "hour" are documented-valid values and avoid validation errors.
   const payload = await ed("/reddit/keyword/search", {
-    name: `author:${username}`,
-    sort: "new",
-    period: "all",
+    name: username,
+    sort: "relevance",
+    period: "hour",
     cursor: "",
   });
 
@@ -728,8 +731,7 @@ async function collectRedditUserPublic(username: string) {
 
   return items.filter((item: any) => {
     const x = item?.data || item;
-    const author = str(x?.author);
-    return !author || author.toLowerCase() === username.toLowerCase();
+    return str(x?.author).toLowerCase() === username.toLowerCase();
   });
 }
 
