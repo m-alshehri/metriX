@@ -1,0 +1,3 @@
+Fixed Vercel TypeScript build error in components/ProjectDashboard.tsx.
+Removed Unicode property escape regex /\p{L}\p{N}/u because the repo's current TS target is below ES6.
+Arabic/English text tokenization remains supported by splitting on punctuation/whitespace instead.

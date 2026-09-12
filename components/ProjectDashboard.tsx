@@ -97,7 +97,7 @@ export default function ProjectDashboard({
         days.set(day, (days.get(day) || 0) + 1);
       }
 
-      for (const raw of String(m.content || "").toLowerCase().split(/[^\p{L}\p{N}_#@]+/u)) {
+      for (const raw of String(m.content || "").toLowerCase().split(/[\s.,!?;:()[\]{}"'`~\/\\|<>+=*&^%$]+/)) {
         const term = raw.trim();
         if (term.length >= 4 && !stop.has(term)) terms.set(term, (terms.get(term) || 0) + 1);
       }
