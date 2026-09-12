@@ -57,16 +57,22 @@ function str(...values: any[]) {
   return "";
 }
 
-function iso(value: any) {
-  if (!value) return new Date().toISOString();
-  if (typeof value === "number" || /^\d+$/.test(String(value))) {
-    const n = Number(value);
-    const ms = n > 100000000000 ? n : n * 1000;
-    const d = new Date(ms);
+function iso(...values: any[]) {
+  for (const value of values) {
+    if (value === undefined || value === null || value === "") continue;
+
+    if (typeof value === "number" || /^\d+$/.test(String(value))) {
+      const n = Number(value);
+      const ms = n > 100000000000 ? n : n * 1000;
+      const d = new Date(ms);
+      if (!Number.isNaN(d.getTime())) return d.toISOString();
+    }
+
+    const d = new Date(value);
     if (!Number.isNaN(d.getTime())) return d.toISOString();
   }
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+
+  return new Date().toISOString();
 }
 
 function firstArray(payload: any): any[] {
