@@ -1,0 +1,12 @@
+metriX v4.3 cron update
+=======================
+
+The daily pipeline cron is now scheduled at 21:00 UTC every day.
+Saudi Arabia is UTC+3, so this runs at exactly 00:00 (midnight) Saudi time.
+
+Cron expression: 0 21 * * *
+Route: /api/cron/metrix-pipeline
+
+The cron route loads all projects from the projects table.
+A project is skipped only when its project_settings row exists and automation_enabled is false.
+Projects with automation enabled, or with no settings row, are processed.
