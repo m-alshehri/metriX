@@ -24,9 +24,11 @@ const keyOf = (p?: string | null) =>
 function Donut({
   segments,
   center,
+  colors,
 }: {
   segments: { label: string; value: number }[];
   center: string;
+  colors?: string[];
 }) {
   const total = Math.max(1, segments.reduce((s, x) => s + x.value, 0));
   let offset = 0;
@@ -44,7 +46,7 @@ function Donut({
             cy="60"
             r="43"
             fill="none"
-            stroke={["#330033", "#6b456b", "#998099", "#c5b7c5", "#e2dce2"][i % 5]}
+            stroke={(colors || ["#330033", "#6b456b", "#998099", "#c5b7c5", "#e2dce2"])[i % (colors?.length || 5)]}
             strokeWidth="15"
             strokeDasharray={`${len} ${circumference - len}`}
             strokeDashoffset={-offset}
@@ -156,12 +158,13 @@ export default function ProjectDashboard({
             <Donut
               center={String(data.sentiment.positive + data.sentiment.neutral + data.sentiment.negative)}
               segments={sentimentSegments}
+              colors={["#22c55e", "#a1a1aa", "#ef4444"]}
             />
             <div className="flex-1 space-y-3 text-sm">
               {sentimentSegments.map((x, i) => (
                 <div key={x.label} className="flex items-center justify-between">
                   <span className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: ["#330033","#998099","#ded6de"][i] }} />
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: ["#22c55e","#a1a1aa","#ef4444"][i] }} />
                     {x.label}
                   </span>
                   <b>{x.value}</b>

@@ -1,102 +1,58 @@
-metriX — UI / Dashboard / Project Management Update
-====================================================
+metriX — FULL UPDATE v4.2
+=========================
 
-THIS BUNDLE ALSO PRESERVES THE LATEST BRIGHT DATA + REDDIT FIXES FROM v3.
-
-IMPORTANT: RUN SQL FIRST
-------------------------
-Open Supabase -> SQL Editor and run:
-
-supabase/project_branding_upgrade.sql
-
-This:
-- adds projects.avatar_url
-- creates the public project-avatars storage bucket
-- adds authenticated upload/update/delete policies
-
-THEN REPLACE / ADD ALL FILES IN THIS ZIP
-----------------------------------------
-
-New shared UI:
-components/SiteHeader.tsx
-components/SiteFooter.tsx
-components/PlatformIcon.tsx
-components/ProjectCardManager.tsx
-components/ProjectDashboard.tsx
-
-Updated:
-components/SocialAccounts.tsx
-app/[locale]/layout.tsx
-app/[locale]/page.tsx
-app/[locale]/dashboard/page.tsx
-app/[locale]/projects/[id]/page.tsx
-
-New API routes:
-app/api/projects/[id]/route.ts
-app/api/projects/[id]/avatar/route.ts
-
-Preserved provider fixes:
-lib/brightdata.ts
-lib/ensembledata.ts
-lib/pipeline.ts
+This is a COMPLETE repository bundle.
 
 WHAT CHANGED
 ------------
+1) HOME PAGE
+- Rebuilt into a richer social-listening SaaS homepage inspired by the current structure and visual rhythm of leading products such as Brand24.
+- Uses original metriX copy and original UI; no Brand24 assets or copied page content.
+- New hero, analytics preview, platform strip, product cards, alert section, AI Insights section, sources section and Request a Demo section.
+- English and Arabic supported.
 
-1) HEADER + FOOTER
-- Brand24-inspired SaaS structure without copying their exact design.
-- Sticky white header.
-- Product / Solutions / Resources / Pricing temporary links (#).
-- Dashboard, language switch and Start free buttons.
-- Large dark footer with Product / Solutions / Resources columns.
-- Added at locale layout level so it appears across the site.
+2) HEADER
+- Dashboard button removed from the public header.
+- If visitor is signed out: shows Login.
+- If visitor is signed in: shows Logout.
+- Start Free replaced with Request a demo.
+- Request a demo scrolls to the demo request form.
 
-2) /en/dashboard
-- Removed the four global KPI cards:
-  Mentions / Reach / Engagement / Positive sentiment.
-- Dashboard now focuses on projects.
-- Each project card supports:
-  - Open project
-  - Rename
-  - Delete
-  - Upload/change a project logo/avatar
-- Logo upload supports PNG/JPG/WebP up to 2 MB.
+3) REQUEST A DEMO FORM
+- New component: components/RequestDemoForm.tsx
+- New API route: app/api/request-demo/route.ts
+- Demo submissions are emailed to:
+  ma.alshehri@hotmail.com
+- Uses existing Vercel environment variables:
+  RESEND_API_KEY
+  ALERT_FROM_EMAIL
+- No extra package is required because the API calls Resend directly with fetch.
+- Reply-To is set to the visitor's submitted email.
+- Includes a simple honeypot field against basic form bots.
 
-3) /en/projects/[id]
-- Rebuilt into a compact dashboard.
-- Platform names are replaced visually by grayscale platform logos.
-- Social source inputs use logos instead of large text labels.
-- Long vertical analytics sections are replaced by one dashboard grid.
-- Added interactive Platform Performance selector:
-  Items / Engagement / Views.
-- Added:
-  Platform share donut
-  Sentiment donut
-  Activity timeline
-  Platform performance bars
-  Topic signals
-  Top engaging content
-- AI Insights is collapsed by default.
-- Automation & Alerts is collapsed by default.
-- Mentions & posts is collapsed by default.
-- Manual test mention form remains available but collapsed.
+4) FOOTER
+- Footer background changed to:
+  #660066
 
-4) PROVIDER FIXES
-- Keeps the latest Bright Data / Reddit v3 fixes already prepared previously.
+5) SENTIMENT
+- Positive = green
+- Neutral = gray
+- Negative = red
+- Applied to project sentiment donut and legend.
+- Homepage dashboard preview uses the same sentiment color convention.
 
-DEPLOYMENT ORDER
-----------------
-1. Run supabase/project_branding_upgrade.sql
-2. Upload ALL files to the same paths in GitHub.
-3. Commit to main.
-4. Wait for Vercel deployment.
-5. Open /en/dashboard.
-6. Test Rename, Delete and project logo upload.
-7. Open a project and confirm the compact analytics dashboard.
+DEPLOYMENT
+----------
+Replace the complete repository contents with this ZIP contents and deploy to Vercel.
 
-NOTES
------
-- Header/footer links using "#" are intentionally temporary as requested.
-- Existing privacy/terms pages are still linked.
-- No new NPM dependency is required.
-- Charts use lightweight SVG/CSS/React, so package.json does not need changes.
+No new SQL is required for v4.2.
+
+IMPORTANT
+---------
+The demo form requires the already-used email environment variables to exist in Vercel:
+RESEND_API_KEY
+ALERT_FROM_EMAIL
+
+ALERT_FROM_EMAIL must be a sender/domain that Resend has verified.
+
+This bundle also preserves the existing provider/backend fixes from v4.1.
