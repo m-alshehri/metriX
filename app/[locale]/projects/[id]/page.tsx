@@ -4,30 +4,21 @@ import { createClient } from "@/lib/supabase/server";
 import { getDictionary, isLocale } from "@/lib/i18n";
 import { addTestMention } from "../actions";
 import { analyzeSentiment } from "../ai-actions";
-import MetricCard from "@/components/MetricCard";
-import ProjectAnalytics from "@/components/ProjectAnalytics";
+import { runFullPipeline } from "../pipeline-actions";
+import { sendTestAlertEmail } from "../email-actions";
+import SocialAccounts from "@/components/SocialAccounts";
+import ProjectDashboard from "@/components/ProjectDashboard";
 import ProjectAIInsights from "@/components/ProjectAIInsights";
-import ProjectTrends from "@/components/ProjectTrends";
-import MegaIntelligence from "@/components/MegaIntelligence";
 import AlertSettings from "@/components/AlertSettings";
 import AlertsCenter from "@/components/AlertsCenter";
+import PlatformIcon from "@/components/PlatformIcon";
 
 export default async function ProjectPage({
   params,
   searchParams,
 }: {
   params: { locale: string; id: string };
-  searchParams?: {
-    message?: string;
-    error?: string;
-    aimessage?: string;
-    aierror?: string;
-    analyzed?: string;
-    insights?: string;
-    insighterror?: string;
-    code?: string;
-    settings?: string;
-  };
+  searchParams?: Record<string, string | undefined>;
 }) {
   if (!isLocale(params.locale)) notFound();
   const locale = params.locale;
@@ -38,80 +29,142 @@ export default async function ProjectPage({
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect(`/${locale}/login`);
 
-  const { data: project } = await supabase
-    .from("projects")
-    .select("id,name,description")
-    .eq("id", params.id)
-    .single();
+  const [{ data: project }, { data: mentions }, { data: lastRun }] = await Promise.all([
+    supabase.from("projects").select("id,name,description,avatar_url").eq("id", params.id).eq("user_id", user.id).single(),
+    supabase
+      .from("mentions")
+      .select("id,platform,author_name,author_username,content,post_url,published_at,likes,shares,replies,views,sentiment,social_account_id")
+      .eq("project_id", params.id)
+      .order("published_at", { ascending: false }),
+    supabase
+      .from("pipeline_runs")
+      .select("status,imported,analyzed,alerts,started_at")
+      .eq("project_id", params.id)
+      .order("started_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
   if (!project) notFound();
 
-  const { data: mentions } = await supabase
-    .from("mentions")
-    .select("id,platform,author_name,author_username,content,post_url,published_at,likes,shares,replies,views,sentiment,social_account_id")
-    .eq("project_id", params.id)
-    .order("published_at", { ascending: false });
-
-  const ms = mentions ?? [];
-  const count = ms.length;
-  const reach = ms.reduce((sum,x)=>sum+(Number(x.views)||0),0);
-  const engagement = ms.reduce((sum,x)=>sum+(x.likes||0)+(x.shares||0)+(x.replies||0),0);
-  const analyzed = ms.filter((x)=>["positive","neutral","negative"].includes(String(x.sentiment)));
-  const positiveCount = analyzed.filter((x)=>x.sentiment==="positive").length;
-  const positive = analyzed.length ? Math.round((positiveCount/analyzed.length)*100) : 0;
-  const pendingCount = ms.filter((x)=>x.sentiment===null).length;
+  const ms = mentions || [];
+  const pendingCount = ms.filter((x) => x.sentiment === null).length;
 
   return (
     <main className="min-h-screen bg-zinc-50">
-      <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <Link href={`/${locale}/dashboard`} className="text-2xl font-black text-metrix-900">metriX</Link>
-          <Link href={`/${locale}/dashboard`} className="rounded-full border px-4 py-2 text-sm font-bold">{t.projects.back}</Link>
-        </div>
-      </header>
-
-      <div className="mx-auto max-w-7xl px-6 py-12">
-        <div className="rounded-[2rem] bg-metrix-950 p-8 text-white">
-          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="text-xs font-black uppercase tracking-[0.2em] text-metrix-300">Project</div>
-              <h1 className="mt-3 text-4xl font-black">{project.name}</h1>
-              <p className="mt-3 text-white/70">{project.description || "—"}</p>
+      <div className="mx-auto max-w-7xl px-6 py-8">
+        <div className="flex flex-col gap-5 rounded-[1.8rem] border bg-white p-5 shadow-sm md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="grid h-14 w-14 place-items-center overflow-hidden rounded-2xl bg-zinc-100 font-black text-zinc-500">
+              {project.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={project.avatar_url} alt="" className="h-full w-full object-cover" />
+              ) : (
+                project.name.slice(0, 2).toUpperCase()
+              )}
             </div>
+            <div>
+              <Link href={`/${locale}/dashboard`} className="text-xs font-bold text-zinc-400 hover:text-[#330033]">
+                {ar ? "← المشاريع" : "← Projects"}
+              </Link>
+              <h1 className="mt-1 text-2xl font-black tracking-tight">{project.name}</h1>
+              <p className="mt-1 text-sm text-zinc-500">{project.description || (ar ? "لوحة الرصد والتحليل" : "Monitoring intelligence dashboard")}</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <form action={runFullPipeline}>
+              <input type="hidden" name="locale" value={locale} />
+              <input type="hidden" name="project_id" value={project.id} />
+              <button className="rounded-full bg-[#330033] px-5 py-2.5 text-sm font-black text-white">
+                {ar ? "تشغيل التحليل" : "Run pipeline"}
+              </button>
+            </form>
             <form action={analyzeSentiment}>
               <input type="hidden" name="locale" value={locale} />
               <input type="hidden" name="project_id" value={project.id} />
-              <button disabled={pendingCount===0} className="rounded-full border border-white/30 bg-white/10 px-6 py-3 font-black text-white disabled:opacity-40">
-                {t.ai.button}{pendingCount>0 ? ` (${pendingCount})` : ""}
+              <button disabled={pendingCount === 0} className="rounded-full border border-zinc-300 bg-white px-5 py-2.5 text-sm font-black text-zinc-700 disabled:opacity-40">
+                {ar ? "تحليل المشاعر" : "Analyze sentiment"}{pendingCount ? ` (${pendingCount})` : ""}
+              </button>
+            </form>
+            <form action={sendTestAlertEmail}>
+              <input type="hidden" name="locale" value={locale} />
+              <input type="hidden" name="project_id" value={project.id} />
+              <button className="rounded-full border border-zinc-300 bg-white px-4 py-2.5 text-sm font-bold text-zinc-600">
+                {ar ? "اختبار البريد" : "Test email"}
               </button>
             </form>
           </div>
         </div>
 
-        <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <MetricCard label={t.dashboard.mentions} value={String(count)} />
-          <MetricCard label={t.dashboard.reach} value={reach.toLocaleString()} />
-          <MetricCard label={t.dashboard.engagement} value={engagement.toLocaleString()} />
-          <MetricCard label={t.dashboard.sentiment} value={analyzed.length ? `${positive}%` : (ar ? "غير محلل" : "Not analyzed")} />
+        {lastRun && (
+          <div className="mt-3 text-right text-xs font-semibold text-zinc-400">
+            {lastRun.status === "success"
+              ? (ar
+                  ? `آخر تشغيل: ${lastRun.imported || 0} مستورد · ${lastRun.analyzed || 0} محلل · ${lastRun.alerts || 0} تنبيه`
+                  : `Last run: ${lastRun.imported || 0} imported · ${lastRun.analyzed || 0} analyzed · ${lastRun.alerts || 0} alerts`)
+              : (ar ? "آخر تشغيل لم يكتمل بنجاح" : "Last pipeline run did not complete successfully")}
+          </div>
+        )}
+
+        <div className="mt-6">
+          <SocialAccounts projectId={params.id} locale={locale} />
         </div>
 
-        <MegaIntelligence projectId={params.id} locale={locale} />
+        <ProjectDashboard mentions={ms as any[]} locale={locale} />
 
-        <ProjectAnalytics mentions={ms} locale={locale} />
+        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+          <details className="rounded-[1.6rem] border bg-white p-5 shadow-sm">
+            <summary className="cursor-pointer list-none font-black">
+              {ar ? "AI Insights والتوصيات" : "AI Insights & recommendations"}
+              <span className="float-end text-zinc-400">＋</span>
+            </summary>
+            <div className="mt-4">
+              <ProjectAIInsights projectId={params.id} locale={locale} searchParams={searchParams} />
+            </div>
+          </details>
 
-        <ProjectAIInsights projectId={params.id} locale={locale} searchParams={searchParams} />
+          <details className="rounded-[1.6rem] border bg-white p-5 shadow-sm">
+            <summary className="cursor-pointer list-none font-black">
+              {ar ? "الأتمتة والتنبيهات" : "Automation & alerts"}
+              <span className="float-end text-zinc-400">＋</span>
+            </summary>
+            <div className="mt-4 space-y-6">
+              <AlertSettings projectId={params.id} locale={locale} status={searchParams?.settings} />
+              <AlertsCenter projectId={params.id} locale={locale} />
+            </div>
+          </details>
+        </div>
 
-        <ProjectTrends mentions={ms} locale={locale} />
+        <details className="mt-6 rounded-[1.6rem] border bg-white p-5 shadow-sm">
+          <summary className="cursor-pointer list-none font-black">
+            {ar ? "الإشارات والمنشورات" : "Mentions & posts"}
+            <span className="float-end rounded-full bg-zinc-100 px-2.5 py-1 text-xs text-zinc-500">{ms.length}</span>
+          </summary>
 
-        <AlertSettings projectId={params.id} locale={locale} status={searchParams?.settings} />
+          <div className="mt-5 space-y-3">
+            {ms.slice(0, 30).map((m) => (
+              <article key={m.id} className="grid gap-3 rounded-2xl border border-zinc-100 bg-zinc-50 p-4 md:grid-cols-[40px_1fr_auto] md:items-start">
+                <div className="grid h-9 w-9 place-items-center rounded-xl bg-white shadow-sm">
+                  <PlatformIcon platform={String(m.platform || "").toLowerCase().replace(/\s+/g, "_")} size={19} />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-zinc-400">{m.author_name || m.author_username || "Unknown"}</div>
+                  <p className="mt-1 line-clamp-2 text-sm leading-6 text-zinc-700">{m.content || "—"}</p>
+                  <div className="mt-2 flex gap-4 text-xs text-zinc-400">
+                    <span>♥ {m.likes || 0}</span><span>↻ {m.shares || 0}</span><span>💬 {m.replies || 0}</span><span>◉ {Number(m.views || 0).toLocaleString()}</span>
+                  </div>
+                </div>
+                {m.post_url && <a href={m.post_url} target="_blank" rel="noreferrer" className="text-xs font-black text-[#330033]">{ar ? "فتح" : "Open"}</a>}
+              </article>
+            ))}
+          </div>
+        </details>
 
-        <AlertsCenter projectId={params.id} locale={locale} />
-
-        <section className="mt-10 rounded-[2rem] border bg-white p-7 shadow-sm">
-          <h2 className="text-xl font-black">{ar ? "إضافة عنصر تجريبي" : "Add test mention"}</h2>
-          <p className="mt-2 text-sm text-zinc-500">
-            {ar ? "نحتفظ بالنموذج التجريبي مؤقتاً لاختبار التحليلات." : "Temporary manual form retained for analytics testing."}
-          </p>
+        <details className="mt-4 rounded-[1.6rem] border border-dashed bg-white p-5">
+          <summary className="cursor-pointer list-none text-sm font-bold text-zinc-500">
+            {ar ? "أداة الاختبار اليدوي (مؤقتة)" : "Manual test tool (temporary)"}
+          </summary>
           <form action={addTestMention} className="mt-5 grid gap-3 sm:grid-cols-2">
             <input type="hidden" name="locale" value={locale} />
             <input type="hidden" name="project_id" value={project.id} />
@@ -131,39 +184,9 @@ export default async function ProjectPage({
               <option value="negative">{t.mentions.negative}</option>
             </select>
             <input name="published_at" type="datetime-local" className="rounded-2xl border px-4 py-3" />
-            <button className="rounded-full bg-metrix-900 px-6 py-3 font-bold text-white sm:col-span-2">{t.mentions.add}</button>
+            <button className="rounded-full bg-[#330033] px-6 py-3 font-bold text-white sm:col-span-2">{t.mentions.add}</button>
           </form>
-        </section>
-
-        <section className="mt-10">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-black">{t.mentions.title}</h2>
-            {pendingCount>0 && <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">{t.ai.pending.replace("{count}",String(pendingCount))}</span>}
-          </div>
-
-          {ms.length===0 ? (
-            <div className="mt-5 rounded-[2rem] border bg-white p-8 text-zinc-500">{t.mentions.empty}</div>
-          ) : (
-            <div className="mt-5 space-y-4">
-              {ms.map((m)=>(
-                <article key={m.id} className="rounded-[2rem] border bg-white p-6 shadow-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <span className="rounded-full bg-metrix-50 px-3 py-1 text-xs font-black text-metrix-900">{m.platform}</span>
-                      <span className="mx-2 font-bold">{m.author_name || m.author_username || "Unknown"}</span>
-                    </div>
-                    {m.sentiment && <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-bold">{m.sentiment}</span>}
-                  </div>
-                  <p className="mt-4 whitespace-pre-wrap leading-7">{m.content}</p>
-                  <div className="mt-4 flex flex-wrap gap-5 text-sm text-zinc-500">
-                    <span>♥ {m.likes}</span><span>↻ {m.shares}</span><span>💬 {m.replies}</span><span>◉ {Number(m.views).toLocaleString()}</span>
-                  </div>
-                  {m.post_url && <a href={m.post_url} target="_blank" rel="noreferrer" className="mt-4 inline-block text-sm font-bold text-metrix-900">{t.mentions.viewPost}</a>}
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
+        </details>
       </div>
     </main>
   );

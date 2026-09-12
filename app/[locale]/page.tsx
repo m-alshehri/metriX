@@ -1,5 +1,37 @@
-import {notFound} from "next/navigation"; import Navbar from "@/components/Navbar"; import DashboardPreview from "@/components/DashboardPreview"; import {getDictionary,isLocale} from "@/lib/i18n";
-export default function HomePage({params}:{params:{locale:string}}){
- if(!isLocale(params.locale))notFound(); const locale=params.locale,t=getDictionary(locale);
- return <main><Navbar locale={locale} t={t}/><section className="relative overflow-hidden"><div className="mx-auto grid max-w-7xl items-center gap-14 px-6 py-24 lg:grid-cols-2"><div><div className="inline-flex rounded-full border border-metrix-200 bg-metrix-50 px-4 py-2 text-sm font-bold text-metrix-800">{t.hero.badge}</div><h1 className="mt-7 text-5xl font-black leading-[1.15] md:text-6xl">{t.hero.title1}<span className="text-metrix-900">{t.hero.title2}</span></h1><p className="mt-6 max-w-xl text-lg leading-8 text-zinc-600">{t.hero.description}</p><div className="mt-8 flex gap-3"><a href={`/${locale}/signup`} className="rounded-full bg-metrix-900 px-6 py-3.5 font-bold text-white">{t.hero.start}</a><a href="#features" className="rounded-full border border-zinc-200 px-6 py-3.5 font-bold">{t.hero.explore}</a></div></div><DashboardPreview t={t}/></div></section><footer className="border-t border-black/5 py-8"><div className="mx-auto flex max-w-7xl justify-between px-6 text-sm text-zinc-500"><span className="font-black text-metrix-900">metriX</span><span>{t.footer}</span></div></footer></main>;
+import { notFound } from "next/navigation";
+import DashboardPreview from "@/components/DashboardPreview";
+import { getDictionary, isLocale } from "@/lib/i18n";
+
+export default function HomePage({ params }: { params: { locale: string } }) {
+  if (!isLocale(params.locale)) notFound();
+  const locale = params.locale;
+  const t = getDictionary(locale);
+
+  return (
+    <main className="bg-white">
+      <section className="relative overflow-hidden">
+        <div className="mx-auto grid max-w-7xl items-center gap-14 px-6 py-24 lg:grid-cols-2">
+          <div>
+            <div className="inline-flex rounded-full border border-metrix-200 bg-metrix-50 px-4 py-2 text-sm font-bold text-metrix-800">
+              {t.hero.badge}
+            </div>
+            <h1 className="mt-7 text-5xl font-black leading-[1.15] md:text-6xl">
+              {t.hero.title1}
+              <span className="text-metrix-900">{t.hero.title2}</span>
+            </h1>
+            <p className="mt-6 max-w-xl text-lg leading-8 text-zinc-600">{t.hero.description}</p>
+            <div className="mt-8 flex gap-3">
+              <a href={`/${locale}/signup`} className="rounded-full bg-metrix-900 px-6 py-3.5 font-bold text-white">
+                {t.hero.start}
+              </a>
+              <a href="#features" className="rounded-full border border-zinc-200 px-6 py-3.5 font-bold">
+                {t.hero.explore}
+              </a>
+            </div>
+          </div>
+          <DashboardPreview t={t} />
+        </div>
+      </section>
+    </main>
+  );
 }

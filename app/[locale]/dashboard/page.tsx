@@ -1,9 +1,78 @@
-import Link from "next/link";import {redirect,notFound} from "next/navigation";import {createClient} from "@/lib/supabase/server";import {getDictionary,isLocale} from "@/lib/i18n";import {signOut} from "../auth/actions";import MetricCard from "@/components/MetricCard";
-export default async function DashboardPage({params}:{params:{locale:string}}){
- if(!isLocale(params.locale))notFound();const locale=params.locale,t=getDictionary(locale),other=locale==="en"?"ar":"en",supabase=createClient();const {data:{user}}=await supabase.auth.getUser();if(!user)redirect(`/${locale}/login`);
- const {data:projects}=await supabase.from("projects").select("id,name,description").order("created_at",{ascending:false});
- const {data:mentions}=await supabase.from("mentions").select("likes,shares,replies,views,sentiment");
- const m=mentions||[],count=m.length,reach=m.reduce((s,x)=>s+(Number(x.views)||0),0),eng=m.reduce((s,x)=>s+(x.likes||0)+(x.shares||0)+(x.replies||0),0),pos=m.filter(x=>x.sentiment==="positive").length,positive=count?Math.round((pos/count)*100):0;
- const displayName=(user.user_metadata?.name as string|undefined)||user.email||"User";
- return <main className="min-h-screen bg-zinc-50"><header className="border-b bg-white"><div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4"><Link href={`/${locale}`} className="text-2xl font-black text-metrix-900">metriX</Link><div className="flex gap-3"><Link href={`/${other}/dashboard`} className="rounded-full border px-4 py-2 text-sm font-bold">{locale==="en"?"العربية":"English"}</Link><form action={signOut}><input type="hidden" name="locale" value={locale}/><button className="rounded-full bg-metrix-900 px-5 py-2.5 text-sm font-bold text-white">{t.dashboard.logout}</button></form></div></div></header><div className="mx-auto max-w-7xl px-6 py-12"><h1 className="text-4xl font-black">{t.dashboard.welcome}, {displayName}</h1><div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-4"><MetricCard label={t.dashboard.mentions} value={String(count)}/><MetricCard label={t.dashboard.reach} value={reach.toLocaleString()}/><MetricCard label={t.dashboard.engagement} value={eng.toLocaleString()}/><MetricCard label={t.dashboard.sentiment} value={`${positive}%`}/></div><div className="mt-10 flex items-center justify-between"><h2 className="text-2xl font-black">{t.dashboard.projectsTitle}</h2><Link href={`/${locale}/projects/new`} className="rounded-full bg-metrix-900 px-6 py-3 font-bold text-white">{t.dashboard.newProject}</Link></div><div className="mt-6 grid gap-5 md:grid-cols-2 lg:grid-cols-3">{(projects||[]).map(p=><Link key={p.id} href={`/${locale}/projects/${p.id}`} className="rounded-[2rem] border bg-white p-6 shadow-sm"><h3 className="text-xl font-black">{p.name}</h3><p className="mt-2 text-sm text-zinc-500">{p.description||"—"}</p><div className="mt-5 text-sm font-bold text-metrix-900">{t.projects.open}</div></Link>)}</div></div></main>;
+import Link from "next/link";
+import { redirect, notFound } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { getDictionary, isLocale } from "@/lib/i18n";
+import { signOut } from "../auth/actions";
+import ProjectCardManager from "@/components/ProjectCardManager";
+
+export default async function DashboardPage({ params }: { params: { locale: string } }) {
+  if (!isLocale(params.locale)) notFound();
+
+  const locale = params.locale;
+  const ar = locale === "ar";
+  const t = getDictionary(locale);
+  const supabase = createClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect(`/${locale}/login`);
+
+  const { data: projects } = await supabase
+    .from("projects")
+    .select("id,name,description,avatar_url,created_at")
+    .order("created_at", { ascending: false });
+
+  const displayName = (user.user_metadata?.name as string | undefined) || user.email || "User";
+
+  return (
+    <main className="min-h-[70vh] bg-zinc-50">
+      <div className="mx-auto max-w-7xl px-6 py-10">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="text-xs font-black uppercase tracking-[.18em] text-zinc-400">
+              {ar ? "مساحة العمل" : "WORKSPACE"}
+            </div>
+            <h1 className="mt-2 text-3xl font-black tracking-tight text-zinc-950">
+              {t.dashboard.welcome}, {displayName}
+            </h1>
+            <p className="mt-2 text-sm text-zinc-500">
+              {ar ? "إدارة مشاريع الرصد والوصول إلى لوحات التحليل." : "Manage monitoring projects and open their intelligence dashboards."}
+            </p>
+          </div>
+
+          <div className="flex gap-2">
+            <Link href={`/${locale}/projects/new`} className="rounded-full bg-[#330033] px-5 py-2.5 text-sm font-black text-white">
+              + {t.dashboard.newProject}
+            </Link>
+            <form action={signOut}>
+              <input type="hidden" name="locale" value={locale} />
+              <button className="rounded-full border border-zinc-300 bg-white px-5 py-2.5 text-sm font-bold text-zinc-700">
+                {t.dashboard.logout}
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <div className="mt-10 flex items-center justify-between">
+          <h2 className="text-xl font-black">{t.dashboard.projectsTitle}</h2>
+          <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-zinc-500 shadow-sm ring-1 ring-zinc-200">
+            {(projects || []).length} {ar ? "مشروع" : "projects"}
+          </span>
+        </div>
+
+        {(projects || []).length === 0 ? (
+          <div className="mt-6 rounded-[2rem] border border-dashed border-zinc-300 bg-white p-12 text-center">
+            <div className="text-3xl">＋</div>
+            <h3 className="mt-3 font-black">{ar ? "أنشئ أول مشروع" : "Create your first project"}</h3>
+            <p className="mt-2 text-sm text-zinc-500">{ar ? "ابدأ بإضافة الجهة أو العلامة التي تريد متابعتها." : "Add the organization or brand you want to monitor."}</p>
+          </div>
+        ) : (
+          <div className="mt-6 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+            {(projects || []).map((p) => (
+              <ProjectCardManager key={p.id} project={p as any} locale={locale} />
+            ))}
+          </div>
+        )}
+      </div>
+    </main>
+  );
 }
