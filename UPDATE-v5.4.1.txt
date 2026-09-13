@@ -1,0 +1,10 @@
+metriX v5.4.1 hotfix
+
+Fixed Vercel TypeScript build error in lib/pipeline.ts:
+- The resumed Bright Data snapshot block referenced an undefined variable `meta`.
+- It now correctly reads `result.providerMeta` into `providerMeta`.
+- Bright Data snapshot observability fields remain intact:
+  returned_rows, normalized_rows, failed_rows, response_sample.
+
+All v5.4 functionality and styling are preserved.
+No additional Supabase SQL is required if v5.4 SQL was already run.

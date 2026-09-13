@@ -42,7 +42,18 @@ async function collectAccount(db:any, account:any) {
     if(job?.external_job_id){
       try{
         const result=await resumeBrightDataSnapshot(job.external_job_id,p,account.handle);
-        await db.from("provider_jobs").update({status:"completed",completed_at:now(),updated_at:now(),attempts:num(job.attempts)+1,last_error:null,returned_rows:num(meta.returned),normalized_rows:num(meta.normalized),failed_rows:num(meta.failed),response_sample:meta.rawSample||null}).eq("id",job.id);
+        const providerMeta=(result as any).providerMeta||{};
+        await db.from("provider_jobs").update({
+          status:"completed",
+          completed_at:now(),
+          updated_at:now(),
+          attempts:num(job.attempts)+1,
+          last_error:null,
+          returned_rows:num(providerMeta.returned),
+          normalized_rows:num(providerMeta.normalized),
+          failed_rows:num(providerMeta.failed),
+          response_sample:providerMeta.rawSample||null
+        }).eq("id",job.id);
         return result;
       }catch(e:any){
         const msg=String(e?.message||e);
