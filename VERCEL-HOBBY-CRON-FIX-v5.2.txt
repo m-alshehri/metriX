@@ -1,0 +1,13 @@
+metriX v5.2 — Vercel Hobby Cron Fix
+===================================
+
+Cause:
+The v5.1 repository had /api/cron/provider-retries scheduled hourly:
+15 * * * *
+Vercel Hobby only permits each Cron Job to run once per day.
+
+Fixed schedules:
+- /api/cron/metrix-pipeline -> 0 21 * * *  = 00:00 Saudi time
+- /api/cron/provider-retries -> 15 21 * * * = 00:15 Saudi time
+
+No Supabase SQL changes are required.
