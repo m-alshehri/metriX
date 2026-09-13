@@ -262,15 +262,15 @@ export default function MetaConnect({ locale }: { locale: string }) {
     <div className="mt-10 rounded-[2rem] border bg-white p-6 shadow-sm">
       <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <div>
-          <div className="text-xs font-black uppercase tracking-[0.2em] text-metrix-700">
+          <div className="text-sm font-extrabold uppercase tracking-[0.2em] text-metrix-700">
             {ar ? "تكاملات المنصات" : "PLATFORM INTEGRATIONS"}
           </div>
 
-          <h2 className="mt-2 text-2xl font-black">
+          <h2 className="mt-2 text-3xl font-extrabold">
             {ar ? "ربط Meta" : "Connect Meta"}
           </h2>
 
-          <p className="mt-2 max-w-2xl text-sm text-zinc-500">
+          <p className="mt-2 max-w-2xl text-base text-zinc-500">
             {connected
               ? ar
                 ? "اختر صفحة Facebook ثم اربطها بالمشروع الذي تريد تحليله."
@@ -286,7 +286,7 @@ export default function MetaConnect({ locale }: { locale: string }) {
             type="button"
             onClick={connect}
             disabled={busy || !sdkReady}
-            className="rounded-full bg-metrix-900 px-6 py-3 font-black text-white disabled:opacity-50"
+            className="rounded-full bg-metrix-900 px-6 py-3 font-extrabold text-white disabled:opacity-50"
           >
             {busy
               ? ar
@@ -302,7 +302,7 @@ export default function MetaConnect({ locale }: { locale: string }) {
       {connected && (
         <div className="mt-6 space-y-3">
           {pages.length === 0 && (
-            <div className="rounded-2xl bg-amber-50 p-4 text-sm font-semibold text-amber-800">
+            <div className="rounded-2xl bg-amber-50 p-4 text-base font-medium text-amber-800">
               {ar
                 ? "تم الاتصال بـ Meta، لكن لم يتم العثور على Facebook Pages متاحة."
                 : "Meta is connected, but no accessible Facebook Pages were found."}
@@ -319,15 +319,15 @@ export default function MetaConnect({ locale }: { locale: string }) {
               >
                 <div className="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
                   <div>
-                    <div className="text-xs font-bold uppercase text-zinc-400">
+                    <div className="text-sm font-semibold uppercase text-zinc-400">
                       Facebook Page
                     </div>
-                    <div className="mt-1 font-black text-zinc-900">
+                    <div className="mt-1 font-extrabold text-zinc-900">
                       {page.name || page.external_id}
                     </div>
 
                     {instagram && (
-                      <div className="mt-1 text-sm text-zinc-500">
+                      <div className="mt-1 text-base text-zinc-500">
                         Instagram:{" "}
                         {instagram.username
                           ? `@${instagram.username}`
@@ -337,7 +337,7 @@ export default function MetaConnect({ locale }: { locale: string }) {
                   </div>
 
                   <label className="block">
-                    <span className="mb-1 block text-xs font-bold text-zinc-500">
+                    <span className="mb-1 block text-sm font-semibold text-zinc-500">
                       {ar ? "مشروع metriX" : "metriX Project"}
                     </span>
 
@@ -349,7 +349,7 @@ export default function MetaConnect({ locale }: { locale: string }) {
                           [page.id]: e.target.value,
                         }))
                       }
-                      className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm"
+                      className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-base"
                     >
                       <option value="">
                         {ar ? "اختر المشروع" : "Select project"}
@@ -367,7 +367,7 @@ export default function MetaConnect({ locale }: { locale: string }) {
                     type="button"
                     onClick={() => assignProject(page.id)}
                     disabled={savingAssetId === page.id}
-                    className="rounded-xl bg-metrix-900 px-5 py-2.5 text-sm font-black text-white disabled:opacity-50"
+                    className="rounded-xl bg-metrix-900 px-5 py-2.5 text-base font-extrabold text-white disabled:opacity-50"
                   >
                     {savingAssetId === page.id
                       ? ar
@@ -380,7 +380,7 @@ export default function MetaConnect({ locale }: { locale: string }) {
                 </div>
 
                 {page.project_id && (
-                  <div className="mt-3 text-xs font-semibold text-emerald-700">
+                  <div className="mt-3 text-sm font-medium text-emerald-700">
                     {ar ? "✓ الصفحة مرتبطة بمشروع" : "✓ Page assigned to a project"}
                   </div>
                 )}
@@ -391,13 +391,13 @@ export default function MetaConnect({ locale }: { locale: string }) {
       )}
 
       {message && (
-        <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">
+        <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-base font-medium text-emerald-800">
           {message}
         </div>
       )}
 
       {error && (
-        <div className="mt-4 rounded-2xl bg-red-50 p-4 text-sm font-semibold text-red-700">
+        <div className="mt-4 rounded-2xl bg-red-50 p-4 text-base font-medium text-red-700">
           {error}
         </div>
       )}

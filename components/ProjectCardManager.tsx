@@ -91,7 +91,7 @@ export default function ProjectCardManager({
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
-          className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-100 text-lg font-black text-zinc-500"
+          className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-100 text-xl font-extrabold text-zinc-500"
           title={ar ? "تغيير الشعار" : "Change project logo"}
         >
           {avatar ? (
@@ -110,29 +110,29 @@ export default function ProjectCardManager({
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="min-w-0 flex-1 rounded-xl border border-zinc-300 px-3 py-2 text-sm font-bold"
+                className="min-w-0 flex-1 rounded-xl border border-zinc-300 px-3 py-2 text-base font-semibold"
                 autoFocus
               />
-              <button disabled={busy} onClick={rename} className="rounded-xl bg-[#330033] px-3 text-xs font-bold text-white">
+              <button disabled={busy} onClick={rename} className="rounded-xl bg-[#330033] px-3 text-sm font-semibold text-white">
                 {ar ? "حفظ" : "Save"}
               </button>
             </div>
           ) : (
-            <h3 className="truncate text-lg font-black text-zinc-900">{project.name}</h3>
+            <h3 className="truncate text-xl font-extrabold text-zinc-900">{project.name}</h3>
           )}
-          <p className="mt-1 line-clamp-2 text-sm leading-6 text-zinc-500">{project.description || (ar ? "مشروع رصد وتحليل" : "Monitoring & analytics project")}</p>
+          <p className="mt-1 line-clamp-2 text-base leading-6 text-zinc-500">{project.description || (ar ? "مشروع رصد وتحليل" : "Monitoring & analytics project")}</p>
         </div>
       </div>
 
       <div className="mt-5 flex items-center justify-between border-t border-zinc-100 pt-4">
-        <Link href={`/${locale}/projects/${project.id}`} className="text-sm font-black text-[#330033]">
+        <Link href={`/${locale}/projects/${project.id}`} className="text-base font-extrabold text-[#330033]">
           {ar ? "فتح اللوحة ←" : "Open dashboard →"}
         </Link>
         <div className="flex gap-1">
-          <button disabled={busy} onClick={() => setEditing((x) => !x)} className="rounded-full px-3 py-1.5 text-xs font-bold text-zinc-600 hover:bg-zinc-100">
+          <button disabled={busy} onClick={() => setEditing((x) => !x)} className="rounded-full px-3 py-1.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-100">
             {ar ? "تعديل الاسم" : "Rename"}
           </button>
-          <button disabled={busy} onClick={removeProject} className="rounded-full px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50">
+          <button disabled={busy} onClick={removeProject} className="rounded-full px-3 py-1.5 text-sm font-semibold text-red-600 hover:bg-red-50">
             {ar ? "حذف" : "Delete"}
           </button>
         </div>

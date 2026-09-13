@@ -1,0 +1,33 @@
+metriX — FULL UPDATE v5.3
+=========================
+
+Changes included
+----------------
+1. Language switcher
+   - Emoji flags removed.
+   - Replaced by circular Saudi Arabia and United Kingdom flags.
+   - The flag switch still changes between Arabic and English.
+
+2. LinkedIn icon
+   - All other platform icons remain unchanged.
+   - LinkedIn now uses an embedded SVG icon and no longer depends on the external
+     Simple Icons mask for LinkedIn, fixing the missing icon issue.
+
+3. Typography
+   - Tajawal remains the font across Arabic and English.
+   - Font weights have been reduced by one Tailwind step throughout the UI.
+     Example: Black -> ExtraBold, Bold -> SemiBold, SemiBold -> Medium.
+   - Text sizes have been increased by one Tailwind step throughout the UI.
+   - Custom pixel text sizes were increased by 2px.
+
+4. Existing v5.2 functionality is preserved
+   - Full v5 intelligence/database pipeline functionality remains.
+   - Vercel Hobby-compatible Cron configuration remains:
+     /api/cron/metrix-pipeline at 21:00 UTC = 00:00 Saudi time.
+     /api/cron/provider-retries at 21:15 UTC = 00:15 Saudi time.
+
+Deployment
+----------
+Replace the complete GitHub repository contents with this ZIP contents and deploy.
+
+No new Supabase SQL is required for v5.3.

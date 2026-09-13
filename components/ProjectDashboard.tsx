@@ -58,8 +58,8 @@ function Donut({
         offset += len;
         return node;
       })}
-      <text x="60" y="57" textAnchor="middle" className="fill-zinc-950 text-[10px] font-black">{center}</text>
-      <text x="60" y="72" textAnchor="middle" className="fill-zinc-400 text-[6px]">items</text>
+      <text x="60" y="57" textAnchor="middle" className="fill-zinc-950 text-[12px] font-extrabold">{center}</text>
+      <text x="60" y="72" textAnchor="middle" className="fill-zinc-400 text-[8px]">items</text>
     </svg>
   );
 }
@@ -130,8 +130,8 @@ export default function ProjectDashboard({
       <div className="grid gap-4 xl:grid-cols-12">
         <div className="rounded-[1.6rem] border bg-white p-5 shadow-sm xl:col-span-4">
           <div className="flex items-center justify-between">
-            <h3 className="font-black">{ar ? "حصة المنصات" : "Platform share"}</h3>
-            <span className="text-xs font-bold text-zinc-400">{data.rows.length} {ar ? "عنصر" : "items"}</span>
+            <h3 className="font-extrabold">{ar ? "حصة المنصات" : "Platform share"}</h3>
+            <span className="text-sm font-semibold text-zinc-400">{data.rows.length} {ar ? "عنصر" : "items"}</span>
           </div>
           <div className="mt-2 flex items-center gap-5">
             <Donut
@@ -145,7 +145,7 @@ export default function ProjectDashboard({
                     <PlatformIcon platform={key} size={18} />
                     <span className="sr-only">{v.label}</span>
                   </div>
-                  <b className="text-sm">{v.items}</b>
+                  <b className="text-base">{v.items}</b>
                 </div>
               ))}
             </div>
@@ -153,14 +153,14 @@ export default function ProjectDashboard({
         </div>
 
         <div className="rounded-[1.6rem] border bg-white p-5 shadow-sm xl:col-span-4">
-          <h3 className="font-black">{ar ? "المشاعر" : "Sentiment"}</h3>
+          <h3 className="font-extrabold">{ar ? "المشاعر" : "Sentiment"}</h3>
           <div className="mt-2 flex items-center gap-5">
             <Donut
               center={String(data.sentiment.positive + data.sentiment.neutral + data.sentiment.negative)}
               segments={sentimentSegments}
               colors={["#22c55e", "#a1a1aa", "#ef4444"]}
             />
-            <div className="flex-1 space-y-3 text-sm">
+            <div className="flex-1 space-y-3 text-base">
               {sentimentSegments.map((x, i) => (
                 <div key={x.label} className="flex items-center justify-between">
                   <span className="flex items-center gap-2">
@@ -175,7 +175,7 @@ export default function ProjectDashboard({
         </div>
 
         <div className="rounded-[1.6rem] border bg-white p-5 shadow-sm xl:col-span-4">
-          <h3 className="font-black">{ar ? "نشاط آخر الفترات" : "Recent activity"}</h3>
+          <h3 className="font-extrabold">{ar ? "نشاط آخر الفترات" : "Recent activity"}</h3>
           <div className="mt-5 flex h-40 items-end gap-1">
             {data.timeline.length ? data.timeline.map(([day, n]) => (
               <div
@@ -184,16 +184,16 @@ export default function ProjectDashboard({
                 className="group relative min-w-1 flex-1 rounded-t bg-[#330033]/80 transition hover:bg-[#330033]"
                 style={{ height: `${Math.max(8, (n / maxDay) * 100)}%` }}
               >
-                <span className="absolute -top-7 left-1/2 hidden -translate-x-1/2 rounded bg-zinc-900 px-2 py-1 text-[10px] text-white group-hover:block">{n}</span>
+                <span className="absolute -top-7 left-1/2 hidden -translate-x-1/2 rounded bg-zinc-900 px-2 py-1 text-[12px] text-white group-hover:block">{n}</span>
               </div>
-            )) : <div className="m-auto text-sm text-zinc-400">{ar ? "لا توجد بيانات بعد" : "No timeline data yet"}</div>}
+            )) : <div className="m-auto text-base text-zinc-400">{ar ? "لا توجد بيانات بعد" : "No timeline data yet"}</div>}
           </div>
         </div>
 
         <div className="rounded-[1.6rem] border bg-white p-5 shadow-sm xl:col-span-7">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h3 className="font-black">{ar ? "مقارنة أداء المنصات" : "Platform performance"}</h3>
-            <div className="flex rounded-full bg-zinc-100 p-1 text-xs font-bold">
+            <h3 className="font-extrabold">{ar ? "مقارنة أداء المنصات" : "Platform performance"}</h3>
+            <div className="flex rounded-full bg-zinc-100 p-1 text-sm font-semibold">
               {(["items","engagement","views"] as const).map((x) => (
                 <button
                   key={x}
@@ -215,7 +215,7 @@ export default function ProjectDashboard({
                   <div className="h-2.5 overflow-hidden rounded-full bg-zinc-100">
                     <div className="h-full rounded-full bg-[#330033]" style={{ width: `${Math.max(2, (val / maxMetric) * 100)}%` }} />
                   </div>
-                  <span className="min-w-16 text-right text-xs font-black text-zinc-700">{val.toLocaleString()}</span>
+                  <span className="min-w-16 text-right text-sm font-extrabold text-zinc-700">{val.toLocaleString()}</span>
                 </div>
               );
             })}
@@ -223,12 +223,12 @@ export default function ProjectDashboard({
         </div>
 
         <div className="rounded-[1.6rem] border bg-white p-5 shadow-sm xl:col-span-5">
-          <h3 className="font-black">{ar ? "إشارات الموضوعات" : "Topic signals"}</h3>
+          <h3 className="font-extrabold">{ar ? "إشارات الموضوعات" : "Topic signals"}</h3>
           <div className="mt-5 flex flex-wrap gap-2">
             {data.topTerms.map(([term, count], i) => (
               <span
                 key={term}
-                className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-2 font-bold text-zinc-700"
+                className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-2 font-semibold text-zinc-700"
                 style={{ fontSize: `${Math.max(11, 16 - i * .45)}px` }}
               >
                 {term} <span className="text-zinc-400">{count}</span>
@@ -238,7 +238,7 @@ export default function ProjectDashboard({
         </div>
 
         <div className="rounded-[1.6rem] border bg-white p-5 shadow-sm xl:col-span-12">
-          <h3 className="font-black">{ar ? "أعلى المحتوى تفاعلاً" : "Top engaging content"}</h3>
+          <h3 className="font-extrabold">{ar ? "أعلى المحتوى تفاعلاً" : "Top engaging content"}</h3>
           <div className="mt-3 divide-y">
             {data.top.map((m, i) => (
               <div key={m.id || i} className="grid gap-3 py-4 md:grid-cols-[40px_1fr_auto] md:items-center">
@@ -246,10 +246,10 @@ export default function ProjectDashboard({
                   <PlatformIcon platform={keyOf(m.platform)} size={19} />
                 </div>
                 <div className="min-w-0">
-                  <p className="line-clamp-1 text-sm font-semibold text-zinc-800">{m.content || "—"}</p>
-                  <p className="mt-1 text-xs text-zinc-400">{m.author_name || m.author_username || "—"}</p>
+                  <p className="line-clamp-1 text-base font-medium text-zinc-800">{m.content || "—"}</p>
+                  <p className="mt-1 text-sm text-zinc-400">{m.author_name || m.author_username || "—"}</p>
                 </div>
-                <div className="text-sm font-black text-[#330033]">{m.score.toLocaleString()}</div>
+                <div className="text-base font-extrabold text-[#330033]">{m.score.toLocaleString()}</div>
               </div>
             ))}
           </div>

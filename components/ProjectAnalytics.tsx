@@ -43,15 +43,15 @@ export default function ProjectAnalytics({
 
   return (
     <section className="mt-10">
-      <div className="text-xs font-black uppercase tracking-[0.2em] text-metrix-700">
+      <div className="text-sm font-extrabold uppercase tracking-[0.2em] text-metrix-700">
         {ar ? "التحليلات" : "ANALYTICS"}
       </div>
-      <h2 className="mt-2 text-3xl font-black">{ar ? "تحليلات الحسابات" : "Account Analytics"}</h2>
+      <h2 className="mt-2 text-4xl font-extrabold">{ar ? "تحليلات الحسابات" : "Account Analytics"}</h2>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <div className="rounded-[2rem] border bg-white p-6 shadow-sm">
-          <h3 className="font-black">{ar ? "توزيع المشاعر" : "Sentiment distribution"}</h3>
-          <p className="mt-1 text-sm text-zinc-500">{analyzed.length} {ar ? "عنصر محلل" : "analyzed"}</p>
+          <h3 className="font-extrabold">{ar ? "توزيع المشاعر" : "Sentiment distribution"}</h3>
+          <p className="mt-1 text-base text-zinc-500">{analyzed.length} {ar ? "عنصر محلل" : "analyzed"}</p>
           <div className="mt-5 space-y-4">
             {[
               ["positive", ar ? "إيجابي" : "Positive", count("positive")],
@@ -59,7 +59,7 @@ export default function ProjectAnalytics({
               ["negative", ar ? "سلبي" : "Negative", count("negative")],
             ].map(([key,label,value]:any)=>(
               <div key={key}>
-                <div className="flex justify-between text-sm"><b>{label}</b><span>{pct(value)}% · {value}</span></div>
+                <div className="flex justify-between text-base"><b>{label}</b><span>{pct(value)}% · {value}</span></div>
                 <div className="mt-1 h-2 rounded bg-zinc-100">
                   <div className="h-2 rounded bg-metrix-900" style={{width:`${pct(value)}%`}} />
                 </div>
@@ -69,9 +69,9 @@ export default function ProjectAnalytics({
         </div>
 
         <div className="rounded-[2rem] border bg-white p-6 shadow-sm">
-          <h3 className="font-black">{ar ? "أداء المنصات" : "Platform performance"}</h3>
+          <h3 className="font-extrabold">{ar ? "أداء المنصات" : "Platform performance"}</h3>
           <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-base">
               <thead><tr className="border-b text-left text-zinc-500">
                 <th className="py-2">{ar ? "المنصة" : "Platform"}</th>
                 <th>{ar ? "العناصر" : "Items"}</th>
@@ -81,7 +81,7 @@ export default function ProjectAnalytics({
               <tbody>
                 {platformRows.map(([p,v])=>(
                   <tr key={p} className="border-b last:border-0">
-                    <td className="py-3 font-bold">{p}</td>
+                    <td className="py-3 font-semibold">{p}</td>
                     <td>{v.mentions}</td><td>{v.engagement.toLocaleString()}</td><td>{v.views.toLocaleString()}</td>
                   </tr>
                 ))}
@@ -93,15 +93,15 @@ export default function ProjectAnalytics({
       </div>
 
       <div className="mt-6 rounded-[2rem] border bg-white p-6 shadow-sm">
-        <h3 className="font-black">{ar ? "الأعلى تفاعلاً" : "Top engaging content"}</h3>
+        <h3 className="font-extrabold">{ar ? "الأعلى تفاعلاً" : "Top engaging content"}</h3>
         <div className="mt-4 space-y-3">
           {top.map((m:any,i)=>(
             <div key={`${m.post_url||i}`} className="flex items-start justify-between gap-4 border-b pb-3">
-              <div><b>{m.platform}</b><p className="mt-1 line-clamp-2 text-sm text-zinc-600">{m.content || "—"}</p></div>
-              <span className="whitespace-nowrap text-sm font-bold">{m.eng.toLocaleString()}</span>
+              <div><b>{m.platform}</b><p className="mt-1 line-clamp-2 text-base text-zinc-600">{m.content || "—"}</p></div>
+              <span className="whitespace-nowrap text-base font-semibold">{m.eng.toLocaleString()}</span>
             </div>
           ))}
-          {!top.length && <p className="text-sm text-zinc-500">{ar ? "لا توجد بيانات بعد." : "No data yet."}</p>}
+          {!top.length && <p className="text-base text-zinc-500">{ar ? "لا توجد بيانات بعد." : "No data yet."}</p>}
         </div>
       </div>
     </section>

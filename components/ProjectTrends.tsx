@@ -33,28 +33,28 @@ export default function ProjectTrends({ mentions, locale }: { mentions: Mention[
 
   return (
     <section className="mt-10">
-      <div className="text-xs font-black uppercase tracking-[0.2em] text-metrix-700">{ar ? "ذكاء الاتجاهات" : "TREND INTELLIGENCE"}</div>
-      <h2 className="mt-2 text-3xl font-black">{ar ? "اتجاهات نشاط الحسابات" : "Account Activity Trends"}</h2>
+      <div className="text-sm font-extrabold uppercase tracking-[0.2em] text-metrix-700">{ar ? "ذكاء الاتجاهات" : "TREND INTELLIGENCE"}</div>
+      <h2 className="mt-2 text-4xl font-extrabold">{ar ? "اتجاهات نشاط الحسابات" : "Account Activity Trends"}</h2>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <div className="rounded-[2rem] border bg-white p-6 shadow-sm">
-          <h3 className="font-black">{ar ? "حجم النشاط بمرور الوقت" : "Activity volume over time"}</h3>
+          <h3 className="font-extrabold">{ar ? "حجم النشاط بمرور الوقت" : "Activity volume over time"}</h3>
           <div className="mt-5 flex h-48 items-end gap-1">
             {timeline.map(([day,n])=>(
               <div key={day} title={`${day}: ${n}`} className="min-w-1 flex-1 rounded-t bg-metrix-900" style={{height:`${Math.max(6,(n/max)*100)}%`}} />
             ))}
           </div>
-          {!timeline.length && <p className="mt-4 text-sm text-zinc-500">{ar ? "لا توجد بيانات زمنية بعد." : "No timeline data yet."}</p>}
+          {!timeline.length && <p className="mt-4 text-base text-zinc-500">{ar ? "لا توجد بيانات زمنية بعد." : "No timeline data yet."}</p>}
         </div>
 
         <div className="rounded-[2rem] border bg-white p-6 shadow-sm">
-          <h3 className="font-black">{ar ? "المواضيع المتكررة" : "Trending terms"}</h3>
+          <h3 className="font-extrabold">{ar ? "المواضيع المتكررة" : "Trending terms"}</h3>
           <div className="mt-4 flex flex-wrap gap-2">
             {topTerms.map(([term,count])=>(
-              <span key={term} className="rounded-full bg-metrix-50 px-3 py-2 text-sm font-bold text-metrix-900">{term} · {count}</span>
+              <span key={term} className="rounded-full bg-metrix-50 px-3 py-2 text-base font-semibold text-metrix-900">{term} · {count}</span>
             ))}
           </div>
-          {!topTerms.length && <p className="text-sm text-zinc-500">{ar ? "لا توجد بيانات كافية بعد." : "Not enough data yet."}</p>}
+          {!topTerms.length && <p className="text-base text-zinc-500">{ar ? "لا توجد بيانات كافية بعد." : "Not enough data yet."}</p>}
         </div>
       </div>
     </section>

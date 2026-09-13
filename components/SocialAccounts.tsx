@@ -94,10 +94,10 @@ export default function SocialAccounts({ projectId, locale }: { projectId: strin
     <section className="rounded-[1.6rem] border bg-white p-5 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <div className="text-xs font-black uppercase tracking-[.18em] text-zinc-400">{ar ? "مصادر الرصد" : "MONITORING SOURCES"}</div>
-          <h2 className="mt-1 text-lg font-black">{ar ? "الحسابات والمنصات" : "Accounts & platforms"}</h2>
+          <div className="text-sm font-extrabold uppercase tracking-[.18em] text-zinc-400">{ar ? "مصادر الرصد" : "MONITORING SOURCES"}</div>
+          <h2 className="mt-1 text-xl font-extrabold">{ar ? "الحسابات والمنصات" : "Accounts & platforms"}</h2>
         </div>
-        <button onClick={save} disabled={loading || saving} className="rounded-full bg-[#330033] px-5 py-2.5 text-sm font-black text-white disabled:opacity-50">
+        <button onClick={save} disabled={loading || saving} className="rounded-full bg-[#330033] px-5 py-2.5 text-base font-extrabold text-white disabled:opacity-50">
           {saving ? (ar ? "جارٍ الحفظ..." : "Saving...") : (ar ? "حفظ المصادر" : "Save sources")}
         </button>
       </div>
@@ -109,7 +109,7 @@ export default function SocialAccounts({ projectId, locale }: { projectId: strin
               <PlatformIcon platform={p.id} size={22} />
               <div className="flex items-center gap-2">
                 {status(p.id)}
-                <span className="text-[9px] font-bold uppercase tracking-wide text-zinc-400">{p.provider === "Bright Data" ? "BD" : "ED"}</span>
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">{p.provider === "Bright Data" ? "BD" : "ED"}</span>
               </div>
             </div>
             <span className="sr-only">{p.label}</span>
@@ -118,14 +118,14 @@ export default function SocialAccounts({ projectId, locale }: { projectId: strin
               onChange={(e) => setValues((v) => ({ ...v, [p.id]: e.target.value }))}
               disabled={loading}
               placeholder={p.placeholder}
-              className="mt-3 w-full border-0 bg-transparent p-0 text-xs outline-none placeholder:text-zinc-400"
+              className="mt-3 w-full border-0 bg-transparent p-0 text-sm outline-none placeholder:text-zinc-400"
             />
           </label>
         ))}
       </div>
 
-      {message && <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-700">{message}</div>}
-      {error && <div className="mt-4 rounded-xl bg-red-50 px-4 py-2 text-xs font-bold text-red-700">{error}</div>}
+      {message && <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">{message}</div>}
+      {error && <div className="mt-4 rounded-xl bg-red-50 px-4 py-2 text-sm font-semibold text-red-700">{error}</div>}
     </section>
   );
 }
