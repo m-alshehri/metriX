@@ -1,0 +1,19 @@
+metriX v5.1 — typography, social icons and language switcher
+=============================================================
+
+CHANGES
+1) Tajawal is now the global font across the English and Arabic metriX UI.
+   Included weights: 200, 300, 400, 500, 700, 800, 900.
+   Implemented with Next.js next/font/google.
+
+2) Social platform marks are no longer hand-drawn approximations.
+   PlatformIcon now renders the Simple Icons v16 SVG artwork for:
+   X, YouTube, Instagram, TikTok, Threads, Facebook, LinkedIn,
+   Google Maps, Reddit and Snapchat.
+   Existing grayscale/currentColor styling remains controllable from the UI.
+
+3) Language indicator:
+   - English UI shows the Saudi flag 🇸🇦 to switch to Arabic.
+   - Arabic UI shows the UK flag 🇬🇧 to switch to English.
+
+No Supabase SQL changes are required for this update.

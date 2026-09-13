@@ -44,10 +44,11 @@ export default async function SiteHeader({ locale }: { locale: string }) {
         <div className="flex items-center gap-2">
           <Link
             href={`/${other}`}
-            className="rounded-full px-3 py-2 text-sm font-black text-zinc-600 transition hover:bg-zinc-100"
-            aria-label={ar ? "English" : "العربية"}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[22px] leading-none transition hover:bg-zinc-100"
+            aria-label={ar ? "Switch to English" : "التبديل إلى العربية"}
+            title={ar ? "English" : "العربية"}
           >
-            {ar ? "EN" : "ع"}
+            {ar ? "🇬🇧" : "🇸🇦"}
           </Link>
 
           {user ? (
