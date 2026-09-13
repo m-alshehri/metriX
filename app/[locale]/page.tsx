@@ -68,7 +68,7 @@ export default function HomePage({ params }: { params: { locale: string } }) {
               {copy.eyebrow}
             </div>
 
-            <h1 className="mt-7 max-w-4xl text-6xl font-extrabold leading-[1.02] tracking-[-0.055em] text-zinc-950 sm:text-7xl lg:text-8xl">
+            <h1 className="mt-7 max-w-4xl text-6xl font-extrabold leading-[1.02] tracking-[-0.055em] text-[#330033] sm:text-7xl lg:text-8xl">
               <span className="block">{copy.headlineA}</span>
               <span className="block text-[#660066]">{copy.headlineB}</span>
               <span className="block">{copy.headlineC}</span>
@@ -93,7 +93,7 @@ export default function HomePage({ params }: { params: { locale: string } }) {
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-[12px] font-extrabold uppercase tracking-[.2em] text-[#660066]">metriX intelligence</div>
-                    <div className="mt-1 text-2xl font-extrabold text-zinc-950">{ar ? "نظرة عامة على العلامة" : "Brand overview"}</div>
+                    <div className="mt-1 text-2xl font-extrabold text-[#330033]">{ar ? "نظرة عامة على العلامة" : "Brand overview"}</div>
                   </div>
                   <div className="rounded-full bg-white px-3 py-2 text-sm font-extrabold text-zinc-500 shadow-sm">{ar ? "آخر 30 يوم" : "Last 30 days"}</div>
                 </div>
@@ -199,7 +199,7 @@ export default function HomePage({ params }: { params: { locale: string } }) {
           </div>
 
           <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-5 shadow-2xl">
-            <div className="rounded-[1.4rem] bg-white p-5 text-zinc-900">
+            <div className="rounded-[1.4rem] bg-white p-5 text-[#330033]">
               <div className="flex items-center justify-between">
                 <div className="font-extrabold">{ar ? "تنبيه ذكي" : "Smart alert"}</div>
                 <div className="rounded-full bg-red-50 px-3 py-1 text-[13px] font-extrabold text-red-600">{ar ? "تغيّر مهم" : "Important shift"}</div>

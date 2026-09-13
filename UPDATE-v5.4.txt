@@ -1,0 +1,16 @@
+metriX v5.4
+===========
+Bright Data reliability fixes:
+- Existing processing snapshot is resumed before any new paid collection request.
+- Pending Bright Data jobs are now shown as processing, not failed.
+- Snapshot ID is persisted immediately.
+- Ready snapshots store returned/normalized/failed counts and a small raw response sample for diagnosis.
+- A zero-row result is shown as no_data rather than Synced.
+- Sync events now record Requested -> Returned -> Normalized -> Inserted -> Updated -> Failed plus snapshot_id.
+- Facebook, LinkedIn and Google Maps keep using Bright Data; other providers are unchanged.
+
+Visual changes:
+- Explicit black/near-black text changed to #330033.
+- Footer background changed to #330033.
+
+IMPORTANT: Run supabase/metrix_v5_4_brightdata_observability.sql before deploying this code.

@@ -17,6 +17,19 @@ export type BrightMention = {
 
 const API = "https://api.brightdata.com/datasets/v3";
 
+export class BrightDataPendingError extends Error {
+  snapshotId: string;
+  constructor(snapshotId: string) {
+    super(`Bright Data is still processing snapshot ${snapshotId}.`);
+    this.name = "BrightDataPendingError";
+    this.snapshotId = snapshotId;
+  }
+}
+
+export function isBrightDataPending(error: any): error is BrightDataPendingError {
+  return error instanceof BrightDataPendingError || Boolean(error?.snapshotId);
+}
+
 const DATASETS = {
   facebook: "gd_lkaxegm826bjpoo9m5",
   linkedin: "gd_lyy3tktm25m4avu764",
@@ -188,9 +201,7 @@ async function getSnapshot(token: string, snapshotId: string) {
     await sleep(2000);
   }
 
-  throw new Error(
-    `Bright Data is still processing snapshot ${snapshotId}. Run Full Pipeline again shortly.`
-  );
+  throw new BrightDataPendingError(snapshotId);
 }
 
 async function scrape(
@@ -220,7 +231,7 @@ async function scrape(
     throw explain(response.status, text);
   }
 
-  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload)) return { rows: payload, snapshotId: null, sourceStatus: "ready" };
 
   const snapshotId = s(
     payload?.snapshot_id,
@@ -229,26 +240,28 @@ async function scrape(
   );
 
   if (snapshotId) {
-    return await getSnapshot(token, snapshotId);
+    const rows = await getSnapshot(token, snapshotId);
+    return { rows, snapshotId, sourceStatus: "ready" };
   }
 
   if (payload?.error) {
     throw explain(response.status, s(payload.error, payload.message));
   }
 
-  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.data)) return { rows: payload.data, snapshotId: null, sourceStatus: "ready" };
 
-  return [];
+  return { rows: [], snapshotId: null, sourceStatus: "empty" };
 }
 
 export async function collectFacebook(target: string) {
   const url = canonicalFacebook(target);
 
   // Bright Data's Facebook Page Posts dataset expects only the page URL.
-  const rows = await scrape(
+  const collection = await scrape(
     DATASETS.facebook,
     [{ url }]
   );
+  const rows = collection.rows;
 
   const mentions: BrightMention[] = rows
     .filter((x: any) => x && !x.error)
@@ -310,10 +323,7 @@ export async function collectFacebook(target: string) {
     })
     .filter((x: BrightMention) => x.external_id !== "fb:");
 
-  return {
-    externalId: null,
-    mentions,
-  };
+  return { externalId: null, mentions, providerMeta: { requested: 1, returned: rows.length, normalized: mentions.length, failed: rows.filter((x:any)=>x?.error).length, snapshotId: collection.snapshotId, rawSample: rows.slice(0,3) } };
 }
 
 export async function collectLinkedIn(target: string) {
@@ -323,10 +333,11 @@ export async function collectLinkedIn(target: string) {
   // Bright Data's current Discover Posts by Company/Profile URL API expects
   // an input object with URL (+ optional dates). Do not send
   // only_authored_posts/type/discover_by; those caused "Invalid input".
-  const rows = await scrape(
+  const collection = await scrape(
     DATASETS.linkedin,
     [{ url }]
   );
+  const rows = collection.rows;
 
   const mentions: BrightMention[] = rows
     .filter((x: any) => x && !x.error)
@@ -390,10 +401,7 @@ export async function collectLinkedIn(target: string) {
     })
     .filter((x: BrightMention) => x.external_id !== "li:");
 
-  return {
-    externalId: null,
-    mentions,
-  };
+  return { externalId: null, mentions, providerMeta: { requested: 1, returned: rows.length, normalized: mentions.length, failed: rows.filter((x:any)=>x?.error).length, snapshotId: collection.snapshotId, rawSample: rows.slice(0,3) } };
 }
 
 export async function collectGoogleMapsReviews(target: string) {
@@ -406,10 +414,11 @@ export async function collectGoogleMapsReviews(target: string) {
   }
 
   // Keep the request body minimal so Bright Data validates it reliably.
-  const rows = await scrape(
+  const collection = await scrape(
     DATASETS.googleMaps,
     [{ url }]
   );
+  const rows = collection.rows;
 
   const mentions: BrightMention[] = rows
     .filter((x: any) => x && !x.error)
@@ -481,10 +490,7 @@ export async function collectGoogleMapsReviews(target: string) {
     })
     .filter((x: BrightMention) => x.external_id !== "gm:");
 
-  return {
-    externalId: null,
-    mentions,
-  };
+  return { externalId: null, mentions, providerMeta: { requested: 1, returned: rows.length, normalized: mentions.length, failed: rows.filter((x:any)=>x?.error).length, snapshotId: collection.snapshotId, rawSample: rows.slice(0,3) } };
 }
 
 // Resume a previously-created Bright Data snapshot instead of starting a new job.
@@ -507,7 +513,7 @@ export async function resumeBrightDataSnapshot(snapshotId: string, platform: str
         replies:n(x.num_comments,x.comments), views:n(x.video_view_count,x.play_count,x.views), raw_data:x
       };
     }).filter((x:BrightMention)=>x.external_id!=="fb:");
-    return { externalId:null, mentions };
+    return { externalId:null, mentions, providerMeta:{requested:0,returned:rows.length,normalized:mentions.length,failed:rows.filter((x:any)=>x?.error).length,snapshotId,rawSample:rows.slice(0,3)} };
   }
 
   if (p === "linkedin") {
@@ -522,7 +528,7 @@ export async function resumeBrightDataSnapshot(snapshotId: string, platform: str
         views:n(x.views,x.impressions), raw_data:x
       };
     }).filter((x:BrightMention)=>x.external_id!=="li:");
-    return { externalId:null, mentions };
+    return { externalId:null, mentions, providerMeta:{requested:0,returned:rows.length,normalized:mentions.length,failed:rows.filter((x:any)=>x?.error).length,snapshotId,rawSample:rows.slice(0,3)} };
   }
 
   if (p === "google_maps") {
@@ -536,7 +542,7 @@ export async function resumeBrightDataSnapshot(snapshotId: string, platform: str
         post_url:s(x.review_url,x.url)||url, published_at:iso(x.review_date,x.date,x.timestamp,x.date_posted),
         likes:n(x.review_likes,x.likes), shares:0, replies:x.owner_answer?1:n(x.replies), views:0, raw_data:x };
     }).filter((x:BrightMention)=>x.external_id!=="gm:");
-    return { externalId:null, mentions };
+    return { externalId:null, mentions, providerMeta:{requested:0,returned:rows.length,normalized:mentions.length,failed:rows.filter((x:any)=>x?.error).length,snapshotId,rawSample:rows.slice(0,3)} };
   }
 
   throw new Error(`Unsupported Bright Data resume platform: ${platform}`);

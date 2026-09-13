@@ -118,7 +118,7 @@ export default function ProjectCardManager({
               </button>
             </div>
           ) : (
-            <h3 className="truncate text-xl font-extrabold text-zinc-900">{project.name}</h3>
+            <h3 className="truncate text-xl font-extrabold text-[#330033]">{project.name}</h3>
           )}
           <p className="mt-1 line-clamp-2 text-base leading-6 text-zinc-500">{project.description || (ar ? "مشروع رصد وتحليل" : "Monitoring & analytics project")}</p>
         </div>

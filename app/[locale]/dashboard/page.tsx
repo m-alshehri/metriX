@@ -31,7 +31,7 @@ export default async function DashboardPage({ params }: { params: { locale: stri
             <div className="text-sm font-extrabold uppercase tracking-[.18em] text-zinc-400">
               {ar ? "مساحة العمل" : "WORKSPACE"}
             </div>
-            <h1 className="mt-2 text-4xl font-extrabold tracking-tight text-zinc-950">
+            <h1 className="mt-2 text-4xl font-extrabold tracking-tight text-[#330033]">
               {t.dashboard.welcome}, {displayName}
             </h1>
             <p className="mt-2 text-base text-zinc-500">

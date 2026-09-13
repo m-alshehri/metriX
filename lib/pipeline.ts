@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { collectFromEnsembleData, type SocialAccount } from "@/lib/ensembledata";
-import { collectFacebook, collectLinkedIn, collectGoogleMapsReviews, resumeBrightDataSnapshot } from "@/lib/brightdata";
+import { collectFacebook, collectLinkedIn, collectGoogleMapsReviews, resumeBrightDataSnapshot, isBrightDataPending } from "@/lib/brightdata";
 import { authorSignals, contentHash, detectLanguageHeuristic, extractTextMetadata, inferMedia, recoverContent } from "@/lib/mention-utils";
 
 function outputText(payload: any) {
@@ -20,16 +20,19 @@ async function usage(db:any, projectId:string, userId:string, eventType:string, 
 async function syncEvent(db:any, payload:any) { await db.from("sync_events").insert(payload); }
 
 async function markAccount(db:any, account:any, status:string, error?:string|null, externalId?:string|null, imported=0) {
-  const success=status==="success";
+  const completed=status==="success" || status==="no_data";
+  const processing=status==="processing";
   const patch:any={ last_synced_at:now(), last_sync_status:status, last_sync_error:error||null, updated_at:now(), provider:providerFor(String(account.platform||"").toLowerCase()) };
   if(externalId) patch.external_id=externalId;
-  if(success){ patch.last_successful_sync=now(); patch.consecutive_failures=0; patch.next_retry_at=null; patch.records_imported=num(account.records_imported)+imported; }
+  if(completed){ patch.last_successful_sync=now(); patch.consecutive_failures=0; patch.next_retry_at=null; patch.records_imported=num(account.records_imported)+imported; }
+  else if(processing){ patch.next_retry_at=new Date(Date.now()+30*60_000).toISOString(); }
   else { const failures=num(account.consecutive_failures)+1; patch.consecutive_failures=failures; patch.next_retry_at=new Date(Date.now()+Math.min(6*60, Math.pow(2,Math.min(failures,5))*10)*60_000).toISOString(); }
   await db.from("social_accounts").update(patch).eq("id",account.id);
 }
 
-function pendingSnapshotId(message:string) {
-  const m=String(message).match(/snapshot\s+([^\s.]+).*processing/i); return m?.[1]||null;
+function pendingSnapshotId(error:any) {
+  if(error?.snapshotId) return String(error.snapshotId);
+  const m=String(error?.message||error||"").match(/snapshot\s+([^\s.]+).*processing/i); return m?.[1]||null;
 }
 
 async function collectAccount(db:any, account:any) {
@@ -39,7 +42,7 @@ async function collectAccount(db:any, account:any) {
     if(job?.external_job_id){
       try{
         const result=await resumeBrightDataSnapshot(job.external_job_id,p,account.handle);
-        await db.from("provider_jobs").update({status:"completed",completed_at:now(),updated_at:now(),attempts:num(job.attempts)+1,last_error:null}).eq("id",job.id);
+        await db.from("provider_jobs").update({status:"completed",completed_at:now(),updated_at:now(),attempts:num(job.attempts)+1,last_error:null,returned_rows:num(meta.returned),normalized_rows:num(meta.normalized),failed_rows:num(meta.failed),response_sample:meta.rawSample||null}).eq("id",job.id);
         return result;
       }catch(e:any){
         const msg=String(e?.message||e);
@@ -54,9 +57,10 @@ async function collectAccount(db:any, account:any) {
   return collectFromEnsembleData(account as SocialAccount);
 }
 
-async function persistProviderJob(db:any, projectId:string,userId:string,account:any,message:string){
-  const snapshotId=pendingSnapshotId(message); if(!snapshotId) return;
-  await db.from("provider_jobs").upsert({ project_id:projectId,user_id:userId,social_account_id:account.id,provider:"Bright Data",platform:account.platform,external_job_id:snapshotId,status:"processing",next_retry_at:new Date(Date.now()+10*60_000).toISOString(),last_error:message,updated_at:now() },{onConflict:"provider,external_job_id"});
+async function persistProviderJob(db:any, projectId:string,userId:string,account:any,error:any){
+  const snapshotId=pendingSnapshotId(error); if(!snapshotId) return null;
+  await db.from("provider_jobs").upsert({ project_id:projectId,user_id:userId,social_account_id:account.id,provider:"Bright Data",platform:account.platform,external_job_id:snapshotId,status:"processing",requested_rows:1,next_retry_at:new Date(Date.now()+10*60_000).toISOString(),last_error:String(error?.message||error),updated_at:now() },{onConflict:"provider,external_job_id"});
+  return snapshotId;
 }
 
 async function upsertMention(db:any, projectId:string,userId:string,account:any,m:any){
@@ -167,11 +171,27 @@ export async function runProjectPipeline(projectId:string,userId:string){
       try{
         const result=await collectAccount(db,account); let ins=0,upd=0;
         for(const m of result.mentions||[]){ const x=await upsertMention(db,projectId,userId,account,m); ins+=x.inserted;upd+=x.updated; }
-        imported+=ins;updated+=upd; await markAccount(db,account,"success",null,result.externalId||null,ins);
-        await syncEvent(db,{project_id:projectId,user_id:userId,social_account_id:account.id,platform:account.platform,provider,status:"success",fetched:result.mentions?.length||0,inserted:ins,updated:upd,duration_ms:Date.now()-t0});
-        await usage(db,projectId,userId,"provider_records",result.mentions?.length||0,provider,{platform:p});
-        details[p]={imported:ins,updated:upd,fetched:result.mentions?.length||0,status:"success",provider};
-      }catch(e:any){ const message=String(e?.message||e); await persistProviderJob(db,projectId,userId,account,message); await markAccount(db,account,"failed",message); await syncEvent(db,{project_id:projectId,user_id:userId,social_account_id:account.id,platform:account.platform,provider,status:"failed",error:message,duration_ms:Date.now()-t0}); details[p]={imported:0,updated:0,status:"failed",error:message,provider}; }
+        imported+=ins;updated+=upd;
+        const fetched=result.mentions?.length||0;
+        const meta=(result as any).providerMeta||{};
+        const sourceStatus=fetched>0?"success":"no_data";
+        await markAccount(db,account,sourceStatus,null,result.externalId||null,ins);
+        await syncEvent(db,{project_id:projectId,user_id:userId,social_account_id:account.id,platform:account.platform,provider,status:sourceStatus,requested:num(meta.requested),returned:num(meta.returned)||fetched,normalized:num(meta.normalized)||fetched,failed:num(meta.failed),snapshot_id:meta.snapshotId||null,fetched,inserted:ins,updated:upd,duration_ms:Date.now()-t0,raw_sample:meta.rawSample||null});
+        await usage(db,projectId,userId,"provider_records",fetched,provider,{platform:p});
+        details[p]={imported:ins,updated:upd,fetched,status:sourceStatus,provider,snapshot_id:meta.snapshotId||null,returned:num(meta.returned)||fetched,normalized:num(meta.normalized)||fetched,failed:num(meta.failed)};
+      }catch(e:any){
+        const message=String(e?.message||e);
+        const snapshotId=await persistProviderJob(db,projectId,userId,account,e);
+        if(isBrightDataPending(e)||snapshotId){
+          await markAccount(db,account,"processing",message);
+          await syncEvent(db,{project_id:projectId,user_id:userId,social_account_id:account.id,platform:account.platform,provider,status:"processing",requested:1,snapshot_id:snapshotId||pendingSnapshotId(e),error:message,duration_ms:Date.now()-t0});
+          details[p]={imported:0,updated:0,status:"processing",snapshot_id:snapshotId||pendingSnapshotId(e),provider};
+        }else{
+          await markAccount(db,account,"failed",message);
+          await syncEvent(db,{project_id:projectId,user_id:userId,social_account_id:account.id,platform:account.platform,provider,status:"failed",failed:1,error:message,duration_ms:Date.now()-t0});
+          details[p]={imported:0,updated:0,status:"failed",error:message,provider};
+        }
+      }
     }
     analyzed=await analyzeEnrichment(db,projectId,userId); await refreshInsights(db,projectId,userId); const metrics=await recordDailyMetrics(db,projectId,userId); alerts=await createAlerts(db,projectId,userId); await dailySummary(db,projectId,userId,metrics); await applyRetention(db,projectId);
     if(run?.id) await db.from("pipeline_runs").update({status:"success",finished_at:now(),imported,analyzed,alerts,details:{version:"v5",updated,duration_ms:Date.now()-started,platforms:details}}).eq("id",run.id);

@@ -322,7 +322,7 @@ export default function MetaConnect({ locale }: { locale: string }) {
                     <div className="text-sm font-semibold uppercase text-zinc-400">
                       Facebook Page
                     </div>
-                    <div className="mt-1 font-extrabold text-zinc-900">
+                    <div className="mt-1 font-extrabold text-[#330033]">
                       {page.name || page.external_id}
                     </div>
 

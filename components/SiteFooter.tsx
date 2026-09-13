@@ -16,7 +16,7 @@ export default function SiteFooter({ locale }: { locale: string }) {
       ];
 
   return (
-    <footer className="mt-0 border-t border-white/10 bg-[#660066] text-white">
+    <footer className="mt-0 border-t border-white/10 bg-[#330033] text-white">
       <div className="mx-auto max-w-7xl px-6 py-14">
         <div className="grid gap-10 md:grid-cols-[1.2fr_2fr]">
           <div>
