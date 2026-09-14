@@ -107,12 +107,12 @@ function canonicalLinkedIn(value: string) {
 
   const companyIndex = parts.indexOf("company");
   if (companyIndex >= 0 && parts[companyIndex + 1]) {
-    return `https://www.linkedin.com/company/${parts[companyIndex + 1]}`;
+    return `https://www.linkedin.com/company/${parts[companyIndex + 1]}/`;
   }
 
   const profileIndex = parts.indexOf("in");
   if (profileIndex >= 0 && parts[profileIndex + 1]) {
-    return `https://www.linkedin.com/in/${parts[profileIndex + 1]}`;
+    return `https://www.linkedin.com/in/${parts[profileIndex + 1]}/`;
   }
 
   throw new Error("Use a canonical LinkedIn company or profile URL");
@@ -126,8 +126,9 @@ function explain(status: number, raw: string) {
   }
 
   if (/invalid input/i.test(raw)) {
+    const compact = String(raw || "").replace(/\s+/g, " ").trim().slice(0, 700);
     return new Error(
-      "Bright Data rejected the target URL/input. Check the saved URL and try again."
+      `Bright Data rejected the target URL/input. Provider response: ${compact || "Invalid input"}`
     );
   }
 

@@ -209,3 +209,70 @@ export async function runProjectPipeline(projectId:string,userId:string){
     return {imported,updated,analyzed,alerts,details};
   }catch(e:any){ if(run?.id) await db.from("pipeline_runs").update({status:"failed",finished_at:now(),imported,analyzed,alerts,details:{version:"v5",updated,error:String(e?.message||e),platforms:details}}).eq("id",run.id); throw e; }
 }
+
+
+// v5.5: Check only existing Bright Data snapshots. This NEVER starts a new Bright Data scrape.
+export async function checkBrightDataSnapshots(projectId:string,userId:string){
+  const db=createAdminClient();
+  const {data:accounts,error}=await db.from("social_accounts").select("*").eq("project_id",projectId).eq("user_id",userId).eq("enabled",true).in("platform",["facebook","linkedin","google_maps"]);
+  if(error) throw error;
+  const details:Record<string,any>={};
+  let imported=0,updated=0,stillProcessing=0,failed=0;
+
+  for(const account of accounts||[]){
+    const p=String(account.platform||"").toLowerCase();
+    const {data:job}=await db.from("provider_jobs").select("*").eq("social_account_id",account.id).eq("provider","Bright Data").eq("status","processing").order("created_at",{ascending:false}).limit(1).maybeSingle();
+    if(!job?.external_job_id){
+      details[p]={status:"no_pending_snapshot"};
+      continue;
+    }
+
+    const t0=Date.now();
+    try{
+      const result=await resumeBrightDataSnapshot(job.external_job_id,p,account.handle);
+      const meta=(result as any).providerMeta||{};
+      let ins=0,upd=0;
+      for(const m of result.mentions||[]){
+        const x=await upsertMention(db,projectId,userId,account,m);
+        ins+=x.inserted; upd+=x.updated;
+      }
+      imported+=ins; updated+=upd;
+      const fetched=result.mentions?.length||0;
+      const sourceStatus=fetched>0?"success":"no_data";
+      await db.from("provider_jobs").update({
+        status:"completed",completed_at:now(),updated_at:now(),attempts:num(job.attempts)+1,last_error:null,
+        returned_rows:num(meta.returned)||fetched,normalized_rows:num(meta.normalized)||fetched,failed_rows:num(meta.failed),response_sample:meta.rawSample||null
+      }).eq("id",job.id);
+      await markAccount(db,account,sourceStatus,null,result.externalId||null,ins);
+      await syncEvent(db,{project_id:projectId,user_id:userId,social_account_id:account.id,platform:account.platform,provider:"Bright Data",status:sourceStatus,requested:0,returned:num(meta.returned)||fetched,normalized:num(meta.normalized)||fetched,failed:num(meta.failed),snapshot_id:job.external_job_id,fetched,inserted:ins,updated:upd,duration_ms:Date.now()-t0,raw_sample:meta.rawSample||null});
+      await usage(db,projectId,userId,"provider_records",fetched,"Bright Data",{platform:p,mode:"snapshot_resume"});
+      details[p]={status:sourceStatus,snapshot_id:job.external_job_id,returned:num(meta.returned)||fetched,normalized:num(meta.normalized)||fetched,inserted:ins,updated:upd,failed:num(meta.failed)};
+    }catch(e:any){
+      const message=String(e?.message||e);
+      if(isBrightDataPending(e)){
+        stillProcessing++;
+        await db.from("provider_jobs").update({attempts:num(job.attempts)+1,last_error:message,next_retry_at:new Date(Date.now()+10*60_000).toISOString(),updated_at:now()}).eq("id",job.id);
+        await markAccount(db,account,"processing",message);
+        await syncEvent(db,{project_id:projectId,user_id:userId,social_account_id:account.id,platform:account.platform,provider:"Bright Data",status:"processing",requested:0,snapshot_id:job.external_job_id,error:message,duration_ms:Date.now()-t0});
+        details[p]={status:"processing",snapshot_id:job.external_job_id};
+      }else{
+        failed++;
+        await db.from("provider_jobs").update({status:"failed",attempts:num(job.attempts)+1,last_error:message,updated_at:now()}).eq("id",job.id);
+        await markAccount(db,account,"failed",message);
+        await syncEvent(db,{project_id:projectId,user_id:userId,social_account_id:account.id,platform:account.platform,provider:"Bright Data",status:"failed",requested:0,failed:1,snapshot_id:job.external_job_id,error:message,duration_ms:Date.now()-t0});
+        details[p]={status:"failed",snapshot_id:job.external_job_id,error:message};
+      }
+    }
+  }
+
+  // Enrich any newly imported records, without creating new provider requests.
+  let analyzed=0;
+  if(imported>0){
+    analyzed=await analyzeEnrichment(db,projectId,userId);
+    await refreshInsights(db,projectId,userId);
+    const metrics=await recordDailyMetrics(db,projectId,userId);
+    await createAlerts(db,projectId,userId);
+    await dailySummary(db,projectId,userId,metrics);
+  }
+  return {imported,updated,analyzed,stillProcessing,failed,details};
+}

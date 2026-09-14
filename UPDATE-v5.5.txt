@@ -1,0 +1,15 @@
+metriX v5.5 — Bright Data snapshot status controls
+
+Changes
+-------
+1. Added “Check Bright Data Status” in Data-source health when a Bright Data source is processing.
+2. This action NEVER starts a new Bright Data collection. It only resumes existing provider_jobs snapshots.
+3. Ready snapshots are downloaded, normalized, inserted/updated in mentions, and the account status is refreshed.
+4. Pending snapshots remain processing and keep the same snapshot ID.
+5. Failed snapshots are marked failed with the provider error retained.
+6. Failed source cards now display the actual stored provider error.
+7. LinkedIn canonical URLs are normalized to a clean company/profile URL with a trailing slash before sending to Bright Data.
+8. Bright Data invalid-input errors now retain a truncated provider response to make LinkedIn diagnostics actionable.
+9. All v5.4.1 functionality and v5.3 styling remain unchanged.
+
+No new Supabase SQL is required for v5.5 if the v5.4 SQL has already been run.
