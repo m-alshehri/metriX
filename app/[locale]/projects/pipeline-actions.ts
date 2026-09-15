@@ -1,4 +1,6 @@
-"use server";\n\nexport const maxDuration = 300;
+"use server";
+
+export const maxDuration = 300;
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";

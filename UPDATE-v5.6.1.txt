@@ -1,0 +1,14 @@
+metriX v5.6.1 hotfix
+
+Fixes the Vercel syntax error in:
+app/[locale]/projects/pipeline-actions.ts
+
+v5.6 accidentally contained literal \n characters after "use server".
+They are now real line breaks:
+
+"use server";
+
+export const maxDuration = 300;
+
+All v5.6 Bright Data snapshot recovery changes are preserved.
+No new Supabase SQL is required.
