@@ -52,12 +52,12 @@ export default async function AdvancedIntelligenceV5({projectId,locale}:{project
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="font-extrabold">{ar?"صحة مصادر البيانات":"Data-source health"}</h3>
-            <p className="mt-1 text-[13px] text-zinc-400">{ar?"التحقق من Bright Data يستكمل الـ Snapshot الموجود فقط ولا يبدأ عملية جمع جديدة.":"Bright Data status check resumes existing snapshots only; it does not start a new scrape."}</p>
+            <p className="mt-1 text-[13px] text-zinc-400">{ar?"التحقق من Bright Data يستكمل الـ Snapshot الموجود فقط ولا يبدأ عملية جمع جديدة.":"Bright Data recovery downloads existing snapshots only; it does not start a new scrape."}</p>
           </div>
           {(accounts||[]).some((a:any)=>a.provider==="Bright Data" && a.last_sync_status==="processing") && <form action={checkBrightDataStatus}>
             <input type="hidden" name="project_id" value={projectId}/>
             <input type="hidden" name="locale" value={locale}/>
-            <button type="submit" className="rounded-full bg-[#330033] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-90">{ar?"تحقق من حالة Bright Data":"Check Bright Data Status"}</button>
+            <button type="submit" className="rounded-full bg-[#330033] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-90">{ar?"تحقق من حالة Bright Data":"Recover Bright Data Snapshots"}</button>
           </form>}
         </div>
         <div className="mt-4 space-y-2">{(accounts||[]).map((a:any)=>{

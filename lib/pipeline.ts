@@ -221,9 +221,9 @@ export async function checkBrightDataSnapshots(projectId:string,userId:string){
 
   for(const account of accounts||[]){
     const p=String(account.platform||"").toLowerCase();
-    const {data:job}=await db.from("provider_jobs").select("*").eq("social_account_id",account.id).eq("provider","Bright Data").eq("status","processing").order("created_at",{ascending:false}).limit(1).maybeSingle();
+    const {data:job}=await db.from("provider_jobs").select("*").eq("social_account_id",account.id).eq("provider","Bright Data").not("external_job_id","is",null).order("created_at",{ascending:false}).limit(1).maybeSingle();
     if(!job?.external_job_id){
-      details[p]={status:"no_pending_snapshot"};
+      details[p]={status:"no_existing_snapshot"};
       continue;
     }
 

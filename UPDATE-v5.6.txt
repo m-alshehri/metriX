@@ -1,0 +1,12 @@
+metriX v5.6 — Bright Data snapshot recovery
+
+- Downloads EXISTING Bright Data snapshots in 1,000-record parts.
+- Uses JSONL and parses JSON/JSONL plus common wrapper structures.
+- Re-downloads the latest existing snapshot even if v5.5 marked it completed/no_data.
+- Recovery action never starts a new paid scrape.
+- More tolerant Facebook, Google Maps, and LinkedIn normalizers.
+- Preserves v5.5 UI, colors, typography, and all existing functionality.
+- No new Supabase SQL is required if v5.4 SQL was already run.
+
+Use "Recover Bright Data Snapshots" for the already-paid Facebook/Google Maps snapshots.
+Do not use Run Full Pipeline merely to recover existing Bright Data data.
