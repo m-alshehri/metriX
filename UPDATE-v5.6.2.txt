@@ -1,0 +1,11 @@
+metriX v5.6.2 hotfix
+
+Fix:
+- Removed `export const maxDuration = 300` from the `pipeline-actions.ts`
+  "use server" Server Actions module.
+- Next.js 14 requires exports from a "use server" module to be async functions.
+- All v5.6 Bright Data recovery logic is preserved.
+- No new Supabase SQL is required.
+
+After deployment, use Recover Bright Data Snapshots rather than Run Full Pipeline
+to recover the existing paid Bright Data snapshots.
