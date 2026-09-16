@@ -27,6 +27,18 @@ export async function signIn(formData:FormData){
   redirect(`/${locale}/dashboard`);
 }
 
+export async function signInWithGoogle(formData:FormData){
+  const locale=safeLocale(formData.get("locale"));
+  const supabase=createClient();
+  const origin=headers().get("origin") ?? "https://www.trymetrix.co";
+  const {data,error}=await supabase.auth.signInWithOAuth({
+    provider:"google",
+    options:{redirectTo:`${origin}/auth/callback?next=/${locale}/dashboard`}
+  });
+  if(error||!data.url) redirect(`/${locale}/login?error=google-login`);
+  redirect(data.url);
+}
+
 export async function requestPasswordReset(formData:FormData){
   const locale=safeLocale(formData.get("locale"));
   const email=String(formData.get("email")??"").trim();

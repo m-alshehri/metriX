@@ -62,7 +62,7 @@ async function analyzePending(projectId: string) {
                       id: { type: "string" },
                       sentiment: {
                         type: "string",
-                        enum: ["positive", "neutral", "negative"],
+                        enum: ["very_positive", "positive", "neutral", "negative", "very_negative"],
                       },
                     },
                   },

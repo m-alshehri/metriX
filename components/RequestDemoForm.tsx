@@ -31,25 +31,25 @@ export default function RequestDemoForm({ locale }: { locale: string }) {
   return (
     <form onSubmit={submit} className="rounded-[2rem] border border-zinc-200 bg-white p-6 shadow-[0_24px_80px_rgba(51,0,51,0.10)] md:p-8">
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="text-base font-semibold text-zinc-700">
+        <label className="text-base text-zinc-700">
           {ar ? "الاسم" : "Name"}
           <input name="name" required className="mt-2 w-full rounded-2xl border border-zinc-200 px-4 py-3 outline-none transition focus:border-[#660066]" />
         </label>
-        <label className="text-base font-semibold text-zinc-700">
+        <label className="text-base text-zinc-700">
           {ar ? "البريد الإلكتروني" : "Work email"}
           <input name="email" type="email" required className="mt-2 w-full rounded-2xl border border-zinc-200 px-4 py-3 outline-none transition focus:border-[#660066]" />
         </label>
-        <label className="text-base font-semibold text-zinc-700">
+        <label className="text-base text-zinc-700">
           {ar ? "الجهة / الشركة" : "Company / organization"}
           <input name="company" required className="mt-2 w-full rounded-2xl border border-zinc-200 px-4 py-3 outline-none transition focus:border-[#660066]" />
         </label>
-        <label className="text-base font-semibold text-zinc-700">
+        <label className="text-base text-zinc-700">
           {ar ? "رقم التواصل" : "Phone"}
           <input name="phone" className="mt-2 w-full rounded-2xl border border-zinc-200 px-4 py-3 outline-none transition focus:border-[#660066]" />
         </label>
       </div>
 
-      <label className="mt-4 block text-base font-semibold text-zinc-700">
+      <label className="mt-4 block text-base text-zinc-700">
         {ar ? "ما الذي تريد رصده؟" : "What would you like to monitor?"}
         <textarea
           name="message"
@@ -63,7 +63,7 @@ export default function RequestDemoForm({ locale }: { locale: string }) {
 
       <button
         disabled={status === "sending"}
-        className="mt-5 w-full rounded-full bg-[#330033] px-6 py-3.5 font-extrabold text-white transition hover:bg-[#660066] disabled:opacity-50"
+        className="mt-5 w-full rounded-full bg-[#330033] px-6 py-3.5 text-white transition hover:bg-[#660066] disabled:opacity-50"
       >
         {status === "sending"
           ? (ar ? "جارٍ الإرسال..." : "Sending...")
@@ -71,12 +71,12 @@ export default function RequestDemoForm({ locale }: { locale: string }) {
       </button>
 
       {status === "sent" && (
-        <p className="mt-4 rounded-2xl bg-emerald-50 px-4 py-3 text-base font-semibold text-emerald-700">
+        <p className="mt-4 rounded-2xl bg-emerald-50 px-4 py-3 text-base text-emerald-700">
           {ar ? "تم إرسال طلبك بنجاح. سنتواصل معك قريباً." : "Your request was sent successfully. We’ll be in touch shortly."}
         </p>
       )}
       {status === "error" && (
-        <p className="mt-4 rounded-2xl bg-red-50 px-4 py-3 text-base font-semibold text-red-700">
+        <p className="mt-4 rounded-2xl bg-red-50 px-4 py-3 text-base text-red-700">
           {ar ? "تعذر إرسال الطلب حالياً. حاول مرة أخرى." : "We couldn’t send your request right now. Please try again."}
         </p>
       )}

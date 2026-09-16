@@ -5,3 +5,7 @@
 html { scroll-behavior: smooth; }
 body { margin:0; background:#fffdfd; color:#330033; font-family:Arial,Helvetica,sans-serif; }
 ::selection { background:#330033; color:white; }
+
+/* v5.7: typography uses size hierarchy only; all text uses regular weight. */
+body, body * { font-weight: 400 !important; }
+strong, b { font-weight: inherit !important; }

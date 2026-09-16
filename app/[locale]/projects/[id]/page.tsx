@@ -1,195 +1,26 @@
 import Link from "next/link";
-import { redirect, notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { getDictionary, isLocale } from "@/lib/i18n";
-import { addTestMention } from "../actions";
-import { analyzeSentiment } from "../ai-actions";
-import { runFullPipeline } from "../pipeline-actions";
-import { sendTestAlertEmail } from "../email-actions";
+import {redirect,notFound} from "next/navigation";
+import {createClient} from "@/lib/supabase/server";
+import {getDictionary,isLocale} from "@/lib/i18n";
+import {addTestMention} from "../actions";
+import {analyzeSentiment} from "../ai-actions";
+import {runFullPipeline} from "../pipeline-actions";
+import {sendTestAlertEmail} from "../email-actions";
 import SocialAccounts from "@/components/SocialAccounts";
 import ProjectDashboard from "@/components/ProjectDashboard";
 import ProjectAIInsights from "@/components/ProjectAIInsights";
 import AlertSettings from "@/components/AlertSettings";
 import AlertsCenter from "@/components/AlertsCenter";
-import PlatformIcon from "@/components/PlatformIcon";
 import AdvancedIntelligenceV5 from "@/components/AdvancedIntelligenceV5";
+import DashboardTabs from "@/components/DashboardTabs";
+import MentionsPosts from "@/components/MentionsPosts";
 
-export default async function ProjectPage({
-  params,
-  searchParams,
-}: {
-  params: { locale: string; id: string };
-  searchParams?: Record<string, string | undefined>;
-}) {
-  if (!isLocale(params.locale)) notFound();
-  const locale = params.locale;
-  const ar = locale === "ar";
-  const t = getDictionary(locale);
-  const supabase = createClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect(`/${locale}/login`);
-
-  const [{ data: project }, { data: mentions }, { data: lastRun }] = await Promise.all([
-    supabase.from("projects").select("id,name,description,avatar_url").eq("id", params.id).eq("user_id", user.id).single(),
-    supabase
-      .from("mentions")
-      .select("id,platform,author_name,author_username,content,post_url,published_at,likes,shares,replies,views,sentiment,social_account_id")
-      .eq("project_id", params.id)
-      .order("published_at", { ascending: false }),
-    supabase
-      .from("pipeline_runs")
-      .select("status,imported,analyzed,alerts,started_at")
-      .eq("project_id", params.id)
-      .order("started_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ]);
-
-  if (!project) notFound();
-
-  const ms = mentions || [];
-  const pendingCount = ms.filter((x) => x.sentiment === null).length;
-
-  return (
-    <main className="min-h-screen bg-zinc-50">
-      <div className="mx-auto max-w-7xl px-6 py-8">
-        <div className="flex flex-col gap-5 rounded-[1.8rem] border bg-white p-5 shadow-sm md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="grid h-14 w-14 place-items-center overflow-hidden rounded-2xl bg-zinc-100 font-extrabold text-zinc-500">
-              {project.avatar_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={project.avatar_url} alt="" className="h-full w-full object-cover" />
-              ) : (
-                project.name.slice(0, 2).toUpperCase()
-              )}
-            </div>
-            <div>
-              <Link href={`/${locale}/dashboard`} className="text-sm font-semibold text-zinc-400 hover:text-[#330033]">
-                {ar ? "← المشاريع" : "← Projects"}
-              </Link>
-              <h1 className="mt-1 text-3xl font-extrabold tracking-tight">{project.name}</h1>
-              <p className="mt-1 text-base text-zinc-500">{project.description || (ar ? "لوحة الرصد والتحليل" : "Monitoring intelligence dashboard")}</p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <form action={runFullPipeline}>
-              <input type="hidden" name="locale" value={locale} />
-              <input type="hidden" name="project_id" value={project.id} />
-              <button className="rounded-full bg-[#330033] px-5 py-2.5 text-base font-extrabold text-white">
-                {ar ? "تشغيل التحليل" : "Run pipeline"}
-              </button>
-            </form>
-            <form action={analyzeSentiment}>
-              <input type="hidden" name="locale" value={locale} />
-              <input type="hidden" name="project_id" value={project.id} />
-              <button disabled={pendingCount === 0} className="rounded-full border border-zinc-300 bg-white px-5 py-2.5 text-base font-extrabold text-zinc-700 disabled:opacity-40">
-                {ar ? "تحليل المشاعر" : "Analyze sentiment"}{pendingCount ? ` (${pendingCount})` : ""}
-              </button>
-            </form>
-            <form action={sendTestAlertEmail}>
-              <input type="hidden" name="locale" value={locale} />
-              <input type="hidden" name="project_id" value={project.id} />
-              <button className="rounded-full border border-zinc-300 bg-white px-4 py-2.5 text-base font-semibold text-zinc-600">
-                {ar ? "اختبار البريد" : "Test email"}
-              </button>
-            </form>
-          </div>
-        </div>
-
-        {lastRun && (
-          <div className="mt-3 text-right text-sm font-medium text-zinc-400">
-            {lastRun.status === "success"
-              ? (ar
-                  ? `آخر تشغيل: ${lastRun.imported || 0} مستورد · ${lastRun.analyzed || 0} محلل · ${lastRun.alerts || 0} تنبيه`
-                  : `Last run: ${lastRun.imported || 0} imported · ${lastRun.analyzed || 0} analyzed · ${lastRun.alerts || 0} alerts`)
-              : (ar ? "آخر تشغيل لم يكتمل بنجاح" : "Last pipeline run did not complete successfully")}
-          </div>
-        )}
-
-        <div className="mt-6">
-          <SocialAccounts projectId={params.id} locale={locale} />
-        </div>
-
-        <ProjectDashboard mentions={ms as any[]} locale={locale} />
-        <AdvancedIntelligenceV5 projectId={params.id} locale={locale} />
-
-        <div className="mt-6 grid gap-4 lg:grid-cols-2">
-          <details className="rounded-[1.6rem] border bg-white p-5 shadow-sm">
-            <summary className="cursor-pointer list-none font-extrabold">
-              {ar ? "AI Insights والتوصيات" : "AI Insights & recommendations"}
-              <span className="float-end text-zinc-400">＋</span>
-            </summary>
-            <div className="mt-4">
-              <ProjectAIInsights projectId={params.id} locale={locale} searchParams={searchParams} />
-            </div>
-          </details>
-
-          <details className="rounded-[1.6rem] border bg-white p-5 shadow-sm">
-            <summary className="cursor-pointer list-none font-extrabold">
-              {ar ? "الأتمتة والتنبيهات" : "Automation & alerts"}
-              <span className="float-end text-zinc-400">＋</span>
-            </summary>
-            <div className="mt-4 space-y-6">
-              <AlertSettings projectId={params.id} locale={locale} status={searchParams?.settings} />
-              <AlertsCenter projectId={params.id} locale={locale} />
-            </div>
-          </details>
-        </div>
-
-        <details className="mt-6 rounded-[1.6rem] border bg-white p-5 shadow-sm">
-          <summary className="cursor-pointer list-none font-extrabold">
-            {ar ? "الإشارات والمنشورات" : "Mentions & posts"}
-            <span className="float-end rounded-full bg-zinc-100 px-2.5 py-1 text-sm text-zinc-500">{ms.length}</span>
-          </summary>
-
-          <div className="mt-5 space-y-3">
-            {ms.slice(0, 30).map((m) => (
-              <article key={m.id} className="grid gap-3 rounded-2xl border border-zinc-100 bg-zinc-50 p-4 md:grid-cols-[40px_1fr_auto] md:items-start">
-                <div className="grid h-9 w-9 place-items-center rounded-xl bg-white shadow-sm">
-                  <PlatformIcon platform={String(m.platform || "").toLowerCase().replace(/\s+/g, "_")} size={19} />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold text-zinc-400">{m.author_name || m.author_username || "Unknown"}</div>
-                  <p className="mt-1 line-clamp-2 text-base leading-6 text-zinc-700">{m.content || "—"}</p>
-                  <div className="mt-2 flex gap-4 text-sm text-zinc-400">
-                    <span>♥ {m.likes || 0}</span><span>↻ {m.shares || 0}</span><span>💬 {m.replies || 0}</span><span>◉ {Number(m.views || 0).toLocaleString()}</span>
-                  </div>
-                </div>
-                {m.post_url && <a href={m.post_url} target="_blank" rel="noreferrer" className="text-sm font-extrabold text-[#330033]">{ar ? "فتح" : "Open"}</a>}
-              </article>
-            ))}
-          </div>
-        </details>
-
-        <details className="mt-4 rounded-[1.6rem] border border-dashed bg-white p-5">
-          <summary className="cursor-pointer list-none text-base font-semibold text-zinc-500">
-            {ar ? "أداة الاختبار اليدوي (مؤقتة)" : "Manual test tool (temporary)"}
-          </summary>
-          <form action={addTestMention} className="mt-5 grid gap-3 sm:grid-cols-2">
-            <input type="hidden" name="locale" value={locale} />
-            <input type="hidden" name="project_id" value={project.id} />
-            <select name="platform" className="rounded-2xl border px-4 py-3">
-              <option>X</option><option>Instagram</option><option>Facebook</option><option>TikTok</option><option>YouTube</option><option>Threads</option>
-            </select>
-            <input name="author_username" className="rounded-2xl border px-4 py-3" placeholder="@username" />
-            <textarea name="content" required rows={3} className="rounded-2xl border px-4 py-3 sm:col-span-2" placeholder={t.mentions.content} />
-            <input name="post_url" className="rounded-2xl border px-4 py-3 sm:col-span-2" placeholder={t.mentions.url} />
-            <input name="likes" type="number" min="0" defaultValue="0" className="rounded-2xl border px-4 py-3" />
-            <input name="shares" type="number" min="0" defaultValue="0" className="rounded-2xl border px-4 py-3" />
-            <input name="replies" type="number" min="0" defaultValue="0" className="rounded-2xl border px-4 py-3" />
-            <input name="views" type="number" min="0" defaultValue="0" className="rounded-2xl border px-4 py-3" />
-            <select name="sentiment" className="rounded-2xl border px-4 py-3">
-              <option value="positive">{t.mentions.positive}</option>
-              <option value="neutral">{t.mentions.neutral}</option>
-              <option value="negative">{t.mentions.negative}</option>
-            </select>
-            <input name="published_at" type="datetime-local" className="rounded-2xl border px-4 py-3" />
-            <button className="rounded-full bg-[#330033] px-6 py-3 font-semibold text-white sm:col-span-2">{t.mentions.add}</button>
-          </form>
-        </details>
-      </div>
-    </main>
-  );
-}
+function avatarFromRaw(raw:any):string|null{if(!raw||typeof raw!=="object")return null;const keys=["profile_pic_url","profile_image_url","profile_image_url_https","avatar_url","avatar","profile_picture","author_image","user_image","thumbnail"];for(const k of keys){const v=raw[k];if(typeof v==="string"&&/^https?:\/\//.test(v))return v}for(const v of Object.values(raw)){if(v&&typeof v==="object"){const found=avatarFromRaw(v);if(found)return found}}return null}
+export default async function ProjectPage({params,searchParams}:{params:{locale:string;id:string};searchParams?:Record<string,string|undefined>}){if(!isLocale(params.locale))notFound();const locale=params.locale,ar=locale==="ar",t=getDictionary(locale),supabase=createClient();const {data:{user}}=await supabase.auth.getUser();if(!user)redirect(`/${locale}/login`);
+const [{data:project},{data:mentions},{data:lastRun}]=await Promise.all([supabase.from("projects").select("id,name,description,avatar_url").eq("id",params.id).eq("user_id",user.id).single(),supabase.from("mentions").select("id,platform,author_name,author_username,content,post_url,published_at,likes,shares,replies,views,sentiment,social_account_id,raw_data").eq("project_id",params.id).order("published_at",{ascending:false}),supabase.from("pipeline_runs").select("status,imported,analyzed,alerts,started_at").eq("project_id",params.id).order("started_at",{ascending:false}).limit(1).maybeSingle()]);if(!project)notFound();const ms=(mentions||[]).map((m:any)=>({...m,avatar_url:avatarFromRaw(m.raw_data)})),pending=ms.filter((x:any)=>x.sentiment===null).length;
+const overview=<ProjectDashboard mentions={ms as any[]} locale={locale}/>;
+const intelligence=<div className="space-y-6"><AdvancedIntelligenceV5 projectId={params.id} locale={locale}/><div className="rounded-[1.6rem] border bg-white p-5 shadow-sm"><ProjectAIInsights projectId={params.id} locale={locale} searchParams={searchParams}/></div></div>;
+const mentionsTab=<MentionsPosts mentions={ms} locale={locale}/>;
+const sources=<div className="space-y-5"><SocialAccounts projectId={params.id} locale={locale}/><details className="rounded-[1.6rem] border border-dashed bg-white p-5"><summary className="cursor-pointer list-none text-base text-zinc-500">{ar?"أداة الاختبار اليدوي (مؤقتة)":"Manual test tool (temporary)"}</summary><form action={addTestMention} className="mt-5 grid gap-3 sm:grid-cols-2"><input type="hidden" name="locale" value={locale}/><input type="hidden" name="project_id" value={project.id}/><select name="platform" className="rounded-2xl border px-4 py-3"><option>X</option><option>Instagram</option><option>Facebook</option><option>TikTok</option><option>YouTube</option><option>Threads</option></select><input name="author_username" className="rounded-2xl border px-4 py-3" placeholder="@username"/><textarea name="content" required rows={3} className="rounded-2xl border px-4 py-3 sm:col-span-2" placeholder={t.mentions.content}/><input name="post_url" className="rounded-2xl border px-4 py-3 sm:col-span-2" placeholder={t.mentions.url}/><input name="likes" type="number" min="0" defaultValue="0" className="rounded-2xl border px-4 py-3"/><input name="shares" type="number" min="0" defaultValue="0" className="rounded-2xl border px-4 py-3"/><input name="replies" type="number" min="0" defaultValue="0" className="rounded-2xl border px-4 py-3"/><input name="views" type="number" min="0" defaultValue="0" className="rounded-2xl border px-4 py-3"/><select name="sentiment" className="rounded-2xl border px-4 py-3"><option value="very_positive">{ar?"إيجابي جدًا":"Very positive"}</option><option value="positive">{ar?"إيجابي":"Positive"}</option><option value="neutral">{ar?"محايد":"Neutral"}</option><option value="negative">{ar?"سلبي":"Negative"}</option><option value="very_negative">{ar?"سلبي جدًا":"Very negative"}</option></select><input name="published_at" type="datetime-local" className="rounded-2xl border px-4 py-3"/><button className="rounded-full bg-[#330033] px-6 py-3 text-white sm:col-span-2">{t.mentions.add}</button></form></details></div>;
+const alerts=<div className="grid gap-5 lg:grid-cols-2"><div className="rounded-[1.6rem] border bg-white p-5 shadow-sm"><AlertSettings projectId={params.id} locale={locale} status={searchParams?.settings}/></div><div className="rounded-[1.6rem] border bg-white p-5 shadow-sm"><AlertsCenter projectId={params.id} locale={locale}/></div></div>;
+return <main className="min-h-screen bg-zinc-50"><div className="mx-auto max-w-7xl px-6 py-8"><div className="flex flex-col gap-5 rounded-[1.8rem] border bg-white p-5 shadow-sm md:flex-row md:items-center md:justify-between"><div className="flex items-center gap-4"><div className="grid h-14 w-14 place-items-center overflow-hidden rounded-2xl bg-zinc-100 text-zinc-500">{project.avatar_url?<img src={project.avatar_url} alt="" className="h-full w-full object-cover"/>:project.name.slice(0,2).toUpperCase()}</div><div><Link href={`/${locale}/dashboard`} className="text-sm text-zinc-400 hover:text-[#330033]">{ar?"← المشاريع":"← Projects"}</Link><h1 className="mt-1 text-3xl tracking-tight">{project.name}</h1><p className="mt-1 text-base text-zinc-500">{project.description||(ar?"لوحة الرصد والتحليل":"Monitoring intelligence dashboard")}</p></div></div><div className="flex flex-wrap gap-2"><form action={runFullPipeline}><input type="hidden" name="locale" value={locale}/><input type="hidden" name="project_id" value={project.id}/><button className="rounded-full bg-[#330033] px-5 py-2.5 text-base text-white">{ar?"تشغيل التحليل":"Run pipeline"}</button></form><form action={analyzeSentiment}><input type="hidden" name="locale" value={locale}/><input type="hidden" name="project_id" value={project.id}/><button disabled={pending===0} className="rounded-full border bg-white px-5 py-2.5 text-base disabled:opacity-40">{ar?"تحليل المشاعر":"Analyze sentiment"}{pending?` (${pending})`:""}</button></form><form action={sendTestAlertEmail}><input type="hidden" name="locale" value={locale}/><input type="hidden" name="project_id" value={project.id}/><button className="rounded-full border bg-white px-4 py-2.5 text-base">{ar?"اختبار البريد":"Test email"}</button></form></div></div>{lastRun&&<div className="mt-3 text-right text-sm text-zinc-400">{lastRun.status==="success"?(ar?`آخر تشغيل: ${lastRun.imported||0} مستورد · ${lastRun.analyzed||0} محلل · ${lastRun.alerts||0} تنبيه`:`Last run: ${lastRun.imported||0} imported · ${lastRun.analyzed||0} analyzed · ${lastRun.alerts||0} alerts`):(ar?"آخر تشغيل لم يكتمل بنجاح":"Last pipeline run did not complete successfully")}</div>}<DashboardTabs tabs={[{id:"overview",label:ar?"نظرة عامة":"Overview",content:overview},{id:"intelligence",label:ar?"الذكاء والتحليلات":"Intelligence",content:intelligence},{id:"mentions",label:ar?"الإشارات والمنشورات":"Mentions & posts",content:mentionsTab},{id:"sources",label:ar?"مصادر البيانات":"Data sources",content:sources},{id:"alerts",label:ar?"التنبيهات":"Alerts",content:alerts}]}/></div></main>}

@@ -20,7 +20,7 @@ export default function SiteFooter({ locale }: { locale: string }) {
       <div className="mx-auto max-w-7xl px-6 py-14">
         <div className="grid gap-10 md:grid-cols-[1.2fr_2fr]">
           <div>
-            <div className="text-4xl font-extrabold tracking-tight">metriX</div>
+            <div className="text-4xl tracking-tight">metriX</div>
             <p className="mt-4 max-w-sm text-base leading-6 text-white/70">
               {ar
                 ? "منصة ذكاء اجتماعي تجمع البيانات العامة وتحولها إلى مؤشرات قابلة للفهم واتخاذ القرار."
@@ -28,7 +28,7 @@ export default function SiteFooter({ locale }: { locale: string }) {
             </p>
             <a
               href={`/${locale}#request-demo`}
-              className="mt-6 inline-flex rounded-full bg-white px-5 py-2.5 text-base font-extrabold text-[#660066] transition hover:bg-white/90"
+              className="mt-6 inline-flex rounded-full bg-white px-5 py-2.5 text-base text-[#660066] transition hover:bg-white/90"
             >
               {ar ? "اطلب عرضاً" : "Request a demo"}
             </a>
@@ -37,7 +37,7 @@ export default function SiteFooter({ locale }: { locale: string }) {
           <div className="grid gap-8 sm:grid-cols-3">
             {groups.map((group) => (
               <div key={group[0]}>
-                <h3 className="text-base font-extrabold">{group[0]}</h3>
+                <h3 className="text-base ">{group[0]}</h3>
                 <div className="mt-4 space-y-3">
                   {group.slice(1).map((item) => (
                     <a key={item} href="#" className="block text-base text-white/65 transition hover:text-white">

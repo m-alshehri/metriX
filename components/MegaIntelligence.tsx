@@ -52,14 +52,14 @@ export default async function MegaIntelligence({ projectId, locale }: { projectI
       <div className="mt-10 rounded-[2rem] border bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div>
-            <div className="text-sm font-extrabold uppercase tracking-[0.2em] text-metrix-700">{ar ? "الأتمتة" : "AUTOMATION"}</div>
-            <h2 className="mt-2 text-3xl font-extrabold">{ar ? "تشغيل التحليل الكامل" : "Run Full Pipeline"}</h2>
+            <div className="text-sm uppercase tracking-[0.2em] text-metrix-700">{ar ? "الأتمتة" : "AUTOMATION"}</div>
+            <h2 className="mt-2 text-3xl ">{ar ? "تشغيل التحليل الكامل" : "Run Full Pipeline"}</h2>
             <p className="mt-2 max-w-2xl text-base leading-6 text-zinc-500">
               {ar
                 ? "يجمع البيانات من الحسابات المحفوظة، يحلل المشاعر، يحدث AI Insights، ثم يفحص التنبيهات."
                 : "Collects data from saved social accounts, analyzes sentiment, refreshes AI Insights, then scans for alerts."}
             </p>
-            <p className="mt-3 text-base font-semibold text-zinc-700">{lastRunLabel}</p>
+            <p className="mt-3 text-base text-zinc-700">{lastRunLabel}</p>
             <p className="mt-2 text-base text-zinc-500">
               {settings?.email_alerts_enabled && settings?.alert_email
                 ? (ar ? `تنبيهات البريد مفعلة إلى ${settings.alert_email}` : `Email alerts enabled for ${settings.alert_email}`)
@@ -70,23 +70,23 @@ export default async function MegaIntelligence({ projectId, locale }: { projectI
             <form action={runFullPipeline}>
               <input type="hidden" name="locale" value={locale} />
               <input type="hidden" name="project_id" value={projectId} />
-              <button className="rounded-full bg-metrix-900 px-6 py-3 font-extrabold text-white">{ar ? "تشغيل كامل الآن" : "Run Full Pipeline"}</button>
+              <button className="rounded-full bg-metrix-900 px-6 py-3 text-white">{ar ? "تشغيل كامل الآن" : "Run Full Pipeline"}</button>
             </form>
             <form action={sendTestAlertEmail}>
               <input type="hidden" name="locale" value={locale} />
               <input type="hidden" name="project_id" value={projectId} />
-              <button className="rounded-full border border-metrix-900 px-6 py-3 font-extrabold text-metrix-900">{ar ? "إرسال بريد تجريبي" : "Send Test Email"}</button>
+              <button className="rounded-full border border-metrix-900 px-6 py-3 text-metrix-900">{ar ? "إرسال بريد تجريبي" : "Send Test Email"}</button>
             </form>
           </div>
         </div>
       </div>
 
-      <div className="mt-10 text-sm font-extrabold uppercase tracking-[0.2em] text-metrix-700">{ar ? "طبقة الذكاء" : "INTELLIGENCE LAYER"}</div>
-      <h2 className="mt-2 text-4xl font-extrabold">{ar ? "المنصات والمواضيع والمؤثرون" : "Platforms, Topics & Influencers"}</h2>
+      <div className="mt-10 text-sm uppercase tracking-[0.2em] text-metrix-700">{ar ? "طبقة الذكاء" : "INTELLIGENCE LAYER"}</div>
+      <h2 className="mt-2 text-4xl ">{ar ? "المنصات والمواضيع والمؤثرون" : "Platforms, Topics & Influencers"}</h2>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <div className="rounded-[2rem] border bg-white p-6 shadow-sm">
-          <h3 className="font-extrabold">{ar ? "توزيع النشاط حسب المنصة" : "Platform share"}</h3>
+          <h3 className="">{ar ? "توزيع النشاط حسب المنصة" : "Platform share"}</h3>
           <div className="mt-4 space-y-3">
             {platformRows.map(([p,v])=> {
               const percent=Math.round((v.count/total)*100);
@@ -97,12 +97,12 @@ export default async function MegaIntelligence({ projectId, locale }: { projectI
         </div>
 
         <div className="rounded-[2rem] border bg-white p-6 shadow-sm">
-          <h3 className="font-extrabold">{ar ? "المواضيع البارزة" : "Topic signals"}</h3>
-          <div className="mt-4 flex flex-wrap gap-2">{topTerms.map(([t,c])=><span key={t} className="rounded-full bg-metrix-50 px-3 py-2 text-base font-semibold">{t} · {c}</span>)}</div>
+          <h3 className="">{ar ? "المواضيع البارزة" : "Topic signals"}</h3>
+          <div className="mt-4 flex flex-wrap gap-2">{topTerms.map(([t,c])=><span key={t} className="rounded-full bg-metrix-50 px-3 py-2 text-base ">{t} · {c}</span>)}</div>
         </div>
 
         <div className="rounded-[2rem] border bg-white p-6 shadow-sm">
-          <h3 className="font-extrabold">{ar ? "أهم المؤلفين" : "Top authors"}</h3>
+          <h3 className="">{ar ? "أهم المؤلفين" : "Top authors"}</h3>
           <div className="mt-4 space-y-3">
             {topAuthors.map(([name,eng])=><div key={name} className="flex justify-between border-b pb-2 text-base"><b>{name}</b><span>{eng} {ar ? "تفاعل" : "eng."}</span></div>)}
           </div>

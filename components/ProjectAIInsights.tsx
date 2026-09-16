@@ -25,7 +25,7 @@ function InsightList({
 
   return (
     <div className="rounded-3xl border bg-white p-6 shadow-sm">
-      <h4 className="text-lg font-extrabold">{title}</h4>
+      <h4 className="text-lg ">{title}</h4>
       <ul className="mt-4 space-y-3 text-base leading-6 text-zinc-600">
         {items.map((item, index) => (
           <li key={`${title}-${index}`} className="flex gap-3">
@@ -115,10 +115,10 @@ export default async function ProjectAIInsights({
     <section className="mt-10 rounded-[2.25rem] border border-metrix-100 bg-gradient-to-br from-white to-metrix-50/40 p-7 shadow-sm">
       <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
         <div>
-          <div className="text-sm font-extrabold uppercase tracking-[0.2em] text-metrix-700">
+          <div className="text-sm uppercase tracking-[0.2em] text-metrix-700">
             {ar ? "ذكاء اصطناعي" : "AI INSIGHTS"}
           </div>
-          <h2 className="mt-2 text-4xl font-extrabold">
+          <h2 className="mt-2 text-4xl ">
             {ar ? "ملخص ذكي للمشروع" : "AI-powered project insights"}
           </h2>
           <p className="mt-2 max-w-2xl text-zinc-500">
@@ -133,7 +133,7 @@ export default async function ProjectAIInsights({
           <input type="hidden" name="locale" value={locale} />
           <button
             type="submit"
-            className="rounded-2xl bg-metrix-900 px-5 py-3 text-base font-extrabold text-white shadow-sm transition hover:opacity-90"
+            className="rounded-2xl bg-metrix-900 px-5 py-3 text-base text-white shadow-sm transition hover:opacity-90"
           >
             {insight
               ? ar
@@ -147,13 +147,13 @@ export default async function ProjectAIInsights({
       </div>
 
       {errorText && (
-        <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-base font-semibold text-red-700">
+        <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-base text-red-700">
           {errorText}
         </div>
       )}
 
       {searchParams?.insights === "generated" && (
-        <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-base font-semibold text-emerald-700">
+        <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-base text-emerald-700">
           {ar
             ? "تم إنشاء التحليل الذكي وحفظه بنجاح."
             : "AI insights generated and saved successfully."}
@@ -162,7 +162,7 @@ export default async function ProjectAIInsights({
 
       {!insight ? (
         <div className="mt-7 rounded-3xl border border-dashed bg-white/70 p-8 text-center">
-          <div className="text-xl font-extrabold">
+          <div className="text-xl ">
             {ar ? "لا يوجد تحليل ذكي بعد" : "No AI insights yet"}
           </div>
           <p className="mt-2 text-base text-zinc-500">
@@ -174,7 +174,7 @@ export default async function ProjectAIInsights({
       ) : (
         <>
           <div className="mt-7 rounded-3xl bg-metrix-950 p-7 text-white">
-            <div className="text-sm font-extrabold uppercase tracking-[0.18em] text-white/60">
+            <div className="text-sm uppercase tracking-[0.18em] text-white/60">
               {ar ? "الملخص التنفيذي" : "EXECUTIVE SUMMARY"}
             </div>
             <p className="mt-4 text-lg leading-8 text-white/90">
@@ -182,11 +182,11 @@ export default async function ProjectAIInsights({
             </p>
 
             <div className="mt-5 flex flex-wrap gap-3 text-sm">
-              <span className="rounded-full bg-white/10 px-3 py-1.5 font-semibold">
+              <span className="rounded-full bg-white/10 px-3 py-1.5 ">
                 {insight.mentions_analyzed}{" "}
                 {ar ? "إشارة تم تحليلها" : "mentions analyzed"}
               </span>
-              <span className="rounded-full bg-white/10 px-3 py-1.5 font-semibold">
+              <span className="rounded-full bg-white/10 px-3 py-1.5 ">
                 {new Intl.DateTimeFormat(ar ? "ar-SA" : "en-US", {
                   dateStyle: "medium",
                   timeStyle: "short",

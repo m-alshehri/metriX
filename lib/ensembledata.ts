@@ -766,7 +766,7 @@ export async function collectFromEnsembleData(account: SocialAccount) {
       externalId,
       mentions: items
         .map((x) => attachRaw(normalizeTwitter(x, handle), x))
-        .filter(Boolean) as NormalizedMention[],
+        .filter(Boolean).slice(0, 100) as NormalizedMention[],
     };
   }
 
@@ -782,7 +782,7 @@ export async function collectFromEnsembleData(account: SocialAccount) {
       externalId,
       mentions: items
         .map((x) => attachRaw(normalizeTikTok(x, handle), x))
-        .filter(Boolean) as NormalizedMention[],
+        .filter(Boolean).slice(0, 100) as NormalizedMention[],
     };
   }
 
@@ -791,7 +791,7 @@ export async function collectFromEnsembleData(account: SocialAccount) {
 
     payload = await ed("/threads/user/posts", {
       id: externalId,
-      chunk_size: 10,
+      chunk_size: 100,
     });
 
     items = chooseItems(payload);
@@ -800,7 +800,7 @@ export async function collectFromEnsembleData(account: SocialAccount) {
       externalId,
       mentions: items
         .map((x) => attachRaw(normalizeThreads(x, handle), x))
-        .filter(Boolean) as NormalizedMention[],
+        .filter(Boolean).slice(0, 100) as NormalizedMention[],
     };
   }
 
@@ -813,7 +813,7 @@ export async function collectFromEnsembleData(account: SocialAccount) {
     payload = await ed("/instagram/user/posts", {
       user_id: externalId,
       depth: 1,
-      chunk_size: 10,
+      chunk_size: 100,
       start_cursor: "",
       alternative_method: false,
     });
@@ -824,7 +824,7 @@ export async function collectFromEnsembleData(account: SocialAccount) {
       externalId,
       mentions: items
         .map((x) => attachRaw(normalizeInstagram(x, handle), x))
-        .filter(Boolean) as NormalizedMention[],
+        .filter(Boolean).slice(0, 100) as NormalizedMention[],
     };
   }
 
@@ -842,7 +842,7 @@ export async function collectFromEnsembleData(account: SocialAccount) {
       externalId,
       mentions: items
         .map((x) => attachRaw(normalizeYouTube(x, handle), x))
-        .filter(Boolean) as NormalizedMention[],
+        .filter(Boolean).slice(0, 100) as NormalizedMention[],
     };
   }
 
@@ -862,7 +862,7 @@ export async function collectFromEnsembleData(account: SocialAccount) {
         externalId: `user:${target.value}`,
         mentions: items
           .map((x) => attachRaw(normalizeReddit(x), x))
-          .filter(Boolean) as NormalizedMention[],
+          .filter(Boolean).slice(0, 100) as NormalizedMention[],
       };
     }
 
@@ -879,7 +879,7 @@ export async function collectFromEnsembleData(account: SocialAccount) {
       externalId: `subreddit:${target.value}`,
       mentions: items
         .map((x) => attachRaw(normalizeReddit(x), x))
-        .filter(Boolean) as NormalizedMention[],
+        .filter(Boolean).slice(0, 100) as NormalizedMention[],
     };
   }
 
@@ -894,7 +894,7 @@ export async function collectFromEnsembleData(account: SocialAccount) {
       externalId,
       mentions: items
         .map((x) => attachRaw(normalizeSnapchat(x, handle), x))
-        .filter(Boolean) as NormalizedMention[],
+        .filter(Boolean).slice(0, 100) as NormalizedMention[],
     };
   }
 

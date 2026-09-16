@@ -221,10 +221,10 @@ async function getSnapshot(token: string, snapshotId: string) {
     const status = String(payload?.status || "").toLowerCase();
 
     if (status === "ready") {
-      const batchSize = 1000;
+      const batchSize = 100;
       const parts = await getSnapshotPartCount(token, snapshotId, batchSize);
       const allRows: any[] = [];
-      for (let part = 1; part <= parts; part++) {
+      for (let part = 1; part <= Math.min(parts, 1); part++) {
         allRows.push(...await downloadSnapshotPart(token, snapshotId, part, batchSize));
       }
       return allRows;
@@ -252,7 +252,7 @@ async function scrape(
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ input }),
+    body: JSON.stringify({ input, limit_per_input: 100 }),
     cache: "no-store",
   });
 
@@ -300,7 +300,7 @@ function unwrapRows(rows: any[]) {
 }
 
 function fbMentions(inputRows: any[]) {
-  const rows = unwrapRows(inputRows);
+  const rows = unwrapRows(inputRows).slice(0,100);
   const mentions: BrightMention[] = rows.filter((x:any)=>x && !x.error).map((x:any) => {
     const id=s(x.post_id,x.postId,x.shortcode,x.id,x.url,x.post_url);
     return {
@@ -320,7 +320,7 @@ function fbMentions(inputRows: any[]) {
 }
 
 function linkedInMentions(inputRows:any[]) {
-  const rows=unwrapRows(inputRows);
+  const rows=unwrapRows(inputRows).slice(0,100);
   const mentions:BrightMention[]=rows.filter((x:any)=>x && !x.error).map((x:any)=>{
     const id=s(x.id,x.post_id,x.activity_id,x.urn,x.url,x.post_url);
     return {
@@ -340,7 +340,7 @@ function linkedInMentions(inputRows:any[]) {
 }
 
 function googleMapsMentions(inputRows:any[],fallbackUrl:string) {
-  const rows=unwrapRows(inputRows);
+  const rows=unwrapRows(inputRows).slice(0,100);
   const mentions:BrightMention[]=rows.filter((x:any)=>x && !x.error).map((x:any)=>{
     const rating=n(x.rating,x.review_rating,x.stars,x.review_stars);
     const id=s(x.review_id,x.reviewId,x.id,x.review_url,x.review_link,
@@ -363,7 +363,7 @@ function googleMapsMentions(inputRows:any[],fallbackUrl:string) {
 
 export async function collectFacebook(target: string) {
   const url=canonicalFacebook(target);
-  const collection=await scrape(DATASETS.facebook,[{url}]);
+  const collection=await scrape(DATASETS.facebook,[{url,num_of_posts:100}]);
   const parsed=fbMentions(collection.rows);
   return {externalId:null,mentions:parsed.mentions,providerMeta:{requested:1,returned:parsed.rows.length,normalized:parsed.mentions.length,failed:parsed.rows.filter((x:any)=>x?.error).length,snapshotId:collection.snapshotId,rawSample:parsed.rows.slice(0,3)}};
 }

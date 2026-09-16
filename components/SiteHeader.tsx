@@ -25,7 +25,7 @@ export default async function SiteHeader({ locale }: { locale: string }) {
   return (
     <header className="sticky top-0 z-50 border-b border-zinc-200/80 bg-white/95 backdrop-blur-xl">
       <div className="mx-auto flex h-[72px] max-w-7xl items-center justify-between gap-6 px-5 lg:px-6">
-        <Link href={`/${locale}`} className="shrink-0 text-[30px] font-extrabold tracking-[-0.04em] text-[#330033]">
+        <Link href={`/${locale}`} className="shrink-0 text-[30px] tracking-[-0.04em] text-[#330033]">
           metri<span className="text-[#660066]">X</span>
         </Link>
 
@@ -34,7 +34,7 @@ export default async function SiteHeader({ locale }: { locale: string }) {
             <a
               key={label}
               href={href}
-              className="rounded-full px-4 py-2 text-base font-semibold text-zinc-700 transition hover:bg-zinc-100 hover:text-[#330033]"
+              className="rounded-full px-4 py-2 text-base text-zinc-700 transition hover:bg-zinc-100 hover:text-[#330033]"
             >
               {label}
             </a>
@@ -61,7 +61,7 @@ export default async function SiteHeader({ locale }: { locale: string }) {
             <form action={signOut}>
               <input type="hidden" name="locale" value={locale} />
               <button
-                className="hidden rounded-full border border-zinc-300 bg-white px-4 py-2 text-base font-extrabold text-zinc-800 transition hover:border-[#660066] hover:text-[#660066] sm:inline-flex"
+                className="hidden rounded-full border border-zinc-300 bg-white px-4 py-2 text-base text-zinc-800 transition hover:border-[#660066] hover:text-[#660066] sm:inline-flex"
               >
                 {ar ? "تسجيل الخروج" : "Logout"}
               </button>
@@ -69,7 +69,7 @@ export default async function SiteHeader({ locale }: { locale: string }) {
           ) : (
             <Link
               href={`/${locale}/login`}
-              className="hidden rounded-full border border-zinc-300 bg-white px-4 py-2 text-base font-extrabold text-zinc-800 transition hover:border-[#660066] hover:text-[#660066] sm:inline-flex"
+              className="hidden rounded-full border border-zinc-300 bg-white px-4 py-2 text-base text-zinc-800 transition hover:border-[#660066] hover:text-[#660066] sm:inline-flex"
             >
               {ar ? "تسجيل الدخول" : "Login"}
             </Link>
@@ -77,7 +77,7 @@ export default async function SiteHeader({ locale }: { locale: string }) {
 
           <a
             href={`/${locale}#request-demo`}
-            className="rounded-full bg-[#330033] px-4 py-2.5 text-base font-extrabold text-white shadow-sm transition hover:bg-[#660066]"
+            className="rounded-full bg-[#330033] px-4 py-2.5 text-base text-white shadow-sm transition hover:bg-[#660066]"
           >
             {ar ? "اطلب عرضاً" : "Request a demo"}
           </a>

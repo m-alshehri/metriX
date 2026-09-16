@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isLocale } from "@/lib/i18n";
 
-type SentimentLabel = "positive" | "neutral" | "negative";
+type SentimentLabel = "very_positive" | "positive" | "neutral" | "negative" | "very_negative";
 
 type AnalysisItem = {
   id: string;
@@ -137,7 +137,7 @@ export async function analyzeSentiment(formData: FormData) {
                     id: { type: "string" },
                     sentiment: {
                       type: "string",
-                      enum: ["positive", "neutral", "negative"],
+                      enum: ["very_positive", "positive", "neutral", "negative", "very_negative"],
                     },
                   },
                   required: ["id", "sentiment"],
@@ -187,7 +187,7 @@ export async function analyzeSentiment(formData: FormData) {
   const validResults = (parsed.results ?? []).filter(
     (result) =>
       validIds.has(result.id) &&
-      ["positive", "neutral", "negative"].includes(result.sentiment)
+      ["very_positive", "positive", "neutral", "negative", "very_negative"].includes(result.sentiment)
   );
 
   let updated = 0;

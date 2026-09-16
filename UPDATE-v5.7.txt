@@ -1,0 +1,18 @@
+metriX v5.7 — Dashboard, sentiment, authentication and collection controls
+
+Implemented:
+- Five-class sentiment: very positive, positive, neutral, negative, very negative.
+- Login: Google OAuth button, Remember me option, forgot-password retained.
+- Recent activity: every bar now has its date label.
+- Typography: all explicit Tailwind font-weight utilities removed from app/components; global regular-weight safeguard added. Existing font sizes retained.
+- Topic signals: expanded English/Arabic stopword filtering (pronouns, prepositions, conjunctions, articles and common function words).
+- Platform filters: Top engaging content, Fastest-growing content, Mentions & posts.
+- Collection cap: maximum 100 normalized records per platform per collection call. Bright Data uses limit_per_input=100, Facebook num_of_posts=100, and snapshot recovery downloads at most one 100-record part. EnsembleData output is capped at 100 and supported chunk_size requests are set to 100.
+- Mentions & posts: profile/avatar image from provider raw data replaces the platform logo; initials are used when no public profile image is supplied.
+- Brand24-style side navigation tabs: Overview, Intelligence, Mentions & posts, Data sources, Alerts.
+- All v5.6.2 Bright Data snapshot recovery behavior is retained.
+
+No new Supabase SQL migration is required.
+
+Google login note:
+Enable/configure Google as an Auth provider in Supabase and add the production callback/redirect URLs before Google OAuth can complete successfully.
