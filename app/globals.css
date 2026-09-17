@@ -6,6 +6,18 @@ html { scroll-behavior: smooth; }
 body { margin:0; background:#fffdfd; color:#330033; font-family:Arial,Helvetica,sans-serif; }
 ::selection { background:#330033; color:white; }
 
-/* v5.7: typography uses size hierarchy only; all text uses regular weight. */
+/* Typography uses size hierarchy only; all text uses regular weight. */
 body, body * { font-weight: 400 !important; }
 strong, b { font-weight: inherit !important; }
+
+/* Sharper visual language across metriX while preserving circular avatars/icons. */
+.rounded-2xl { border-radius: .65rem !important; }
+.rounded-3xl { border-radius: .75rem !important; }
+
+@keyframes metrixBar { 0%,100% { transform:scaleY(.58); opacity:.45 } 50% { transform:scaleY(1); opacity:1 } }
+@keyframes metrixFloat { 0%,100% { transform:translateY(0) } 50% { transform:translateY(-6px) } }
+@keyframes metrixPulse { 0%,100% { opacity:.45 } 50% { opacity:1 } }
+.metrix-bar { transform-origin:bottom; animation:metrixBar 3.2s ease-in-out infinite; }
+.metrix-float { animation:metrixFloat 4.5s ease-in-out infinite; }
+.metrix-pulse { animation:metrixPulse 2.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .metrix-bar,.metrix-float,.metrix-pulse { animation:none !important; } }
