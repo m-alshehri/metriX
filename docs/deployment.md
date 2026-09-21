@@ -1,6 +1,10 @@
 # Deployment and database preflight
 
-This change has not been applied to a live Supabase project. Review and test in staging before production rollout.
+The app rollout and full migration set have not been applied to production. On 2026-09-21, only `20260921025058_retention_rpc_access.sql` was applied to the connected meriX project. Verification confirmed that anon/authenticated cannot execute retention and service_role still can; the two function-access security advisories disappeared. No data was deleted.
+
+The live schema inspection found a three-value sentiment constraint and a global `(platform, external_id)` unique index. `20260921025034_legacy_schema_compatibility.sql` expands sentiment to five values and replaces global uniqueness with project-scoped uniqueness; it remains pending. A read-only duplicate check found zero duplicate `(project_id, external_id)` groups at inspection time. The regression suite covers this legacy upgrade.
+
+The remote migration history contains the isolated retention hotfix. Before applying older pending migrations, reconcile the migration list and use the CLI's documented pending-history workflow; do not mark the older migrations as applied without executing them. Review and test the complete upgrade in staging before production rollout.
 
 ## Existing database
 

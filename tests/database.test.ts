@@ -218,3 +218,27 @@ it("rolls back enrichment when any item belongs to another project", async () =>
     ).rows,
   ).toEqual([{ topic: "education" }]);
 });
+
+it("upgrades legacy sentiment and global identity constraints without losing rows", async () => {
+  await db.exec(`alter table mentions drop constraint mentions_sentiment_check;
+ alter table mentions add constraint mentions_sentiment_check check(sentiment is null or sentiment in ('positive','neutral','negative'));
+ create unique index mentions_platform_external_id_unique on mentions(platform,external_id) where external_id is not null;`);
+  const f = (await readdir("supabase/migrations")).find((f) =>
+    f.endsWith("_legacy_schema_compatibility.sql"),
+  )!;
+  await db.exec(await readFile(`supabase/migrations/${f}`, "utf8"));
+  await db.exec(`update mentions set sentiment='very_positive' where project_id='${pa}';
+ insert into mentions(project_id,user_id,platform,external_id) values('${pb}','${b}','X','one');`);
+  expect(
+    (
+      await db.query<any>(
+        "select count(*)::int n from mentions where external_id='one'",
+      )
+    ).rows[0].n,
+  ).toBe(2);
+  await expect(
+    db.exec(
+      `insert into mentions(project_id,user_id,platform,external_id) values('${pb}','${b}','X','one')`,
+    ),
+  ).rejects.toThrow();
+});
