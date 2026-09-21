@@ -8,19 +8,24 @@ function asBool(value: FormDataEntryValue | null) {
   return value === "on" || value === "true" || value === "1";
 }
 
-function clampNumber(value: FormDataEntryValue | null, min: number, max: number, fallback: number) {
+function clampNumber(
+  value: FormDataEntryValue | null,
+  min: number,
+  max: number,
+  fallback: number,
+) {
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(max, Math.max(min, n));
 }
 
 export async function saveAlertSettings(formData: FormData) {
-  const locale = String(formData.get("locale") || "en");
+  const locale = formData.get("locale") === "ar" ? "ar" : "en";
   const projectId = String(formData.get("project_id") || "");
 
   if (!projectId) redirect(`/${locale}/dashboard`);
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -40,42 +45,56 @@ export async function saveAlertSettings(formData: FormData) {
   const emailAlertsEnabled = asBool(formData.get("email_alerts_enabled"));
   const alertEmailRaw = String(formData.get("alert_email") || "").trim();
   const negativeThreshold = Math.round(
-    clampNumber(formData.get("negative_threshold"), 1, 100, 40)
+    clampNumber(formData.get("negative_threshold"), 1, 100, 40),
   );
-  const spikeMultiplier = clampNumber(formData.get("spike_multiplier"), 1, 10, 1.5);
-  const retentionDays = Math.round(clampNumber(formData.get("retention_days"), 30, 3650, 365));
+  const spikeMultiplier = clampNumber(
+    formData.get("spike_multiplier"),
+    1,
+    10,
+    1.5,
+  );
+  const retentionDays = Math.round(
+    clampNumber(formData.get("retention_days"), 30, 3650, 365),
+  );
   const dailySummaryEnabled = asBool(formData.get("daily_summary_enabled"));
   const anomalyAlertsEnabled = asBool(formData.get("anomaly_alerts_enabled"));
-  const comparisonWindowDays = Math.round(clampNumber(formData.get("comparison_window_days"), 1, 90, 7));
+  const comparisonWindowDays = Math.round(
+    clampNumber(formData.get("comparison_window_days"), 1, 90, 7),
+  );
 
   const alertEmail =
     emailAlertsEnabled && alertEmailRaw.length > 0 ? alertEmailRaw : null;
 
-  const { error } = await supabase
-    .from("project_settings")
-    .upsert(
-      {
-        project_id: projectId,
-        user_id: user.id,
-        automation_enabled: automationEnabled,
-        email_alerts_enabled: emailAlertsEnabled,
-        alert_email: alertEmail,
-        negative_threshold: negativeThreshold,
-        spike_multiplier: spikeMultiplier,
-        retention_days: retentionDays,
-        daily_summary_enabled: dailySummaryEnabled,
-        anomaly_alerts_enabled: anomalyAlertsEnabled,
-        comparison_window_days: comparisonWindowDays,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "project_id" }
-    );
+  if (alertEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(alertEmail))
+    redirect(`/${locale}/projects/${projectId}?tab=alerts&settings=failed`);
+  const { error } = await supabase.from("project_settings").upsert(
+    {
+      project_id: projectId,
+      report_locale: locale,
+      user_id: user.id,
+      automation_enabled: automationEnabled,
+      email_alerts_enabled: emailAlertsEnabled,
+      alert_email: alertEmail,
+      negative_threshold: negativeThreshold,
+      spike_multiplier: spikeMultiplier,
+      retention_days: retentionDays,
+      daily_summary_enabled: dailySummaryEnabled,
+      anomaly_alerts_enabled: anomalyAlertsEnabled,
+      comparison_window_days: comparisonWindowDays,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "project_id" },
+  );
 
   if (error) {
     console.error("Failed to save project settings:", error);
-    redirect(`/${locale}/projects/${projectId}?settings=failed#alert-settings`);
+    redirect(
+      `/${locale}/projects/${projectId}?tab=alerts&settings=failed#alert-settings`,
+    );
   }
 
   revalidatePath(`/${locale}/projects/${projectId}`);
-  redirect(`/${locale}/projects/${projectId}?settings=saved#alert-settings`);
+  redirect(
+    `/${locale}/projects/${projectId}?tab=alerts&settings=saved#alert-settings`,
+  );
 }

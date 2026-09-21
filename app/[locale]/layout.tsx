@@ -10,17 +10,22 @@ const tajawal = Tajawal({
   display: "swap",
 });
 
-export default function LocaleLayout({
-  children,
-  params,
-}: {
+export default async function LocaleLayout(props: {
   children: React.ReactNode;
-  params: { locale: string };
+  params: Promise<{ locale: string }>;
 }) {
+  const params = await props.params;
+
+  const { children } = props;
+
   if (!isLocale(params.locale)) notFound();
 
   return (
-    <div lang={params.locale} dir={params.locale === "ar" ? "rtl" : "ltr"} className={`${tajawal.className} min-h-screen bg-zinc-50`}>
+    <div
+      lang={params.locale}
+      dir={params.locale === "ar" ? "rtl" : "ltr"}
+      className={`${tajawal.className} min-h-screen bg-zinc-50`}
+    >
       <SiteHeader locale={params.locale} />
       {children}
       <SiteFooter locale={params.locale} />

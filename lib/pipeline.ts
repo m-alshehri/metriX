@@ -1,278 +1,758 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase-admin";
-import { collectFromEnsembleData, type SocialAccount } from "@/lib/ensembledata";
-import { collectFacebook, collectLinkedIn, collectGoogleMapsReviews, resumeBrightDataSnapshot, isBrightDataPending } from "@/lib/brightdata";
-import { authorSignals, contentHash, detectLanguageHeuristic, extractTextMetadata, inferMedia, recoverContent } from "@/lib/mention-utils";
+import { checked } from "@/lib/db-result";
+import { collectFromEnsembleData } from "@/lib/ensembledata";
+import {
+  collectFacebook,
+  collectLinkedIn,
+  collectGoogleMapsReviews,
+  resumeBrightDataSnapshot,
+  isBrightDataPending,
+} from "@/lib/brightdata";
+import {
+  authorSignals,
+  contentHash,
+  detectLanguageHeuristic,
+  extractTextMetadata,
+  inferMedia,
+  recoverContent,
+} from "@/lib/mention-utils";
+import { generate, insightSchema, validateInsight, sentiments } from "@/lib/ai";
+import { fetchJson } from "@/lib/http";
+import { escapeHtml, safePublicUrl } from "@/lib/security";
 
-function outputText(payload: any) {
-  if (typeof payload?.output_text === "string") return payload.output_text;
-  for (const o of payload?.output || []) for (const c of o?.content || []) if (typeof c?.text === "string") return c.text;
-  return "";
+type DB = ReturnType<typeof createAdminClient>;
+type State = {
+  stage: string;
+  account: number;
+  accounts?: any[];
+  imported?: number;
+  analyzed?: number;
+  alerts?: number;
+  pending?: number;
+  batches?: number;
+  runId?: string;
+};
+export type PipelineJob = {
+  id: string;
+  project_id: string;
+  user_id: string;
+  mode: string;
+  locale: string;
+  state: State;
+};
+const stamp = () => new Date().toISOString();
+const num = (x: unknown) => Math.max(0, Number(x) || 0);
+const provider = (platform: string) =>
+  ["facebook", "linkedin", "google_maps"].includes(platform)
+    ? "Bright Data"
+    : "EnsembleData";
+
+async function recordUsage(
+  db: DB,
+  j: PipelineJob,
+  type: string,
+  quantity: number,
+  source: string,
+) {
+  checked(
+    await db.from("metrix_usage_events").insert({
+      project_id: j.project_id,
+      user_id: j.user_id,
+      event_type: type,
+      quantity,
+      provider: source,
+      metadata: { job_id: j.id },
+    }),
+  );
 }
-const now = () => new Date().toISOString();
-const num = (v:any) => Number(v || 0) || 0;
-const providerFor = (p:string) => ["facebook","linkedin","google_maps"].includes(p) ? "Bright Data" : "EnsembleData";
-
-async function usage(db:any, projectId:string, userId:string, eventType:string, quantity=1, provider?:string, metadata:any={}) {
-  await db.from("metrix_usage_events").insert({ project_id:projectId, user_id:userId, event_type:eventType, quantity, provider:provider||null, metadata });
+async function collect(db: DB, j: PipelineJob, a: any) {
+  const p = a.platform,
+    source = provider(p);
+  let snapshotId: string | null = null;
+  if (source === "Bright Data") {
+    const job = checked(
+      await db
+        .from("provider_jobs")
+        .select("*")
+        .eq("social_account_id", a.id)
+        .eq("status", "processing")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    );
+    snapshotId = job?.external_job_id || null;
+    if (j.mode === "recover" && !snapshotId)
+      return { count: 0, pending: false };
+  }
+  try {
+    const result = snapshotId
+      ? await resumeBrightDataSnapshot(snapshotId, p, a.handle)
+      : p === "facebook"
+        ? await collectFacebook(a.handle)
+        : p === "linkedin"
+          ? await collectLinkedIn(a.handle)
+          : p === "google_maps"
+            ? await collectGoogleMapsReviews(a.handle)
+            : await collectFromEnsembleData(a);
+    const rows = (result.mentions || []).map((m: any) => {
+      const content = recoverContent(m.raw_data, String(m.content || "")).slice(
+          0,
+          20000,
+        ),
+        lang = detectLanguageHeuristic(content),
+        media = inferMedia(m.raw_data);
+      return {
+        project_id: j.project_id,
+        user_id: j.user_id,
+        social_account_id: a.id,
+        platform: m.platform,
+        external_id: m.external_id,
+        author_name: m.author_name,
+        author_username: m.author_username,
+        content,
+        post_url: safePublicUrl(m.post_url),
+        published_at: m.published_at,
+        likes: num(m.likes),
+        shares: num(m.shares),
+        replies: num(m.replies),
+        views: num(m.views),
+        raw_data: m.raw_data || null,
+        content_hash: contentHash(m.platform, content, m.author_username),
+        detected_language: lang,
+        media_type: media.mediaType,
+        media_url: media.mediaUrl,
+        thumbnail_url: media.thumbnailUrl,
+        media_count: media.mediaCount,
+        ...extractTextMetadata(content),
+        last_seen_at: stamp(),
+        updated_at: stamp(),
+        quality_status: content.length < 2 ? "incomplete" : "ok",
+        virality_score:
+          Math.round(
+            ((num(m.likes) + num(m.shares) + num(m.replies)) /
+              Math.sqrt(
+                Math.max(
+                  1,
+                  (Date.now() - Date.parse(m.published_at)) / 3600000,
+                ),
+              )) *
+              100,
+          ) / 100,
+      };
+    });
+    // Convert metadata names once at the boundary.
+    for (const r of rows as any[]) {
+      r.mentioned_users = r.mentionedUsers;
+      r.outbound_urls = r.outboundUrls;
+      r.outbound_domains = r.outboundDomains;
+      delete r.mentionedUsers;
+      delete r.outboundUrls;
+      delete r.outboundDomains;
+    }
+    const unique = Array.from(
+      new Map(rows.map((r: any) => [r.external_id, r])).values(),
+    ) as any[];
+    if (unique.length) {
+      const saved =
+        checked(
+          await db
+            .from("mentions")
+            .upsert(unique, { onConflict: "project_id,external_id" })
+            .select("id,likes,shares,replies,views"),
+        ) || [];
+      checked(
+        await db.from("mention_metrics_history").upsert(
+          saved.map((m) => ({
+            mention_id: m.id,
+            project_id: j.project_id,
+            user_id: j.user_id,
+            likes: m.likes,
+            shares: m.shares,
+            replies: m.replies,
+            views: m.views,
+            sample_key: j.id,
+          })),
+          { onConflict: "mention_id,sample_key" },
+        ),
+      );
+    }
+    const authors = new Map<string, any>();
+    for (const m of unique) {
+      const a = authorSignals(m.raw_data);
+      if (!m.author_username || a.followers === null) continue;
+      authors.set(`${m.platform}:${m.author_username}`, {
+        project_id: j.project_id,
+        user_id: j.user_id,
+        social_account_id: m.social_account_id,
+        platform: m.platform,
+        author_username: m.author_username,
+        author_name: m.author_name,
+        followers: a.followers,
+        following: a.following,
+        verified: a.verified,
+        biography: a.biography,
+        account_category: a.category,
+        location: a.location,
+        influence_score:
+          a.followers * 0.6 + (m.likes + m.shares + m.replies) * 0.4,
+        sample_key: j.id,
+      });
+    }
+    if (authors.size)
+      checked(
+        await db.from("author_snapshots").upsert([...authors.values()], {
+          onConflict: "project_id,platform,author_username,sample_key",
+        }),
+      );
+    // Mark snapshots complete only AFTER every normalized row is persisted.
+    if (snapshotId)
+      checked(
+        await db
+          .from("provider_jobs")
+          .update({
+            status: "completed",
+            completed_at: stamp(),
+            updated_at: stamp(),
+            returned_rows: unique.length,
+            last_error: null,
+          })
+          .eq("provider", "Bright Data")
+          .eq("external_job_id", snapshotId),
+      );
+    checked(
+      await db
+        .from("social_accounts")
+        .update({
+          external_id: result.externalId || a.external_id,
+          last_synced_at: stamp(),
+          last_successful_sync: stamp(),
+          last_sync_status: unique.length ? "success" : "no_data",
+          last_sync_error: null,
+          consecutive_failures: 0,
+          next_retry_at: null,
+          provider: source,
+        })
+        .eq("id", a.id)
+        .eq("handle", a.handle),
+    );
+    checked(
+      await db.from("sync_events").insert({
+        project_id: j.project_id,
+        user_id: j.user_id,
+        social_account_id: a.id,
+        platform: p,
+        provider: source,
+        status: unique.length ? "success" : "no_data",
+        fetched: unique.length,
+        returned: unique.length,
+        normalized: unique.length,
+        updated: unique.length,
+        snapshot_id: snapshotId,
+      }),
+    );
+    await recordUsage(db, j, "provider_records", unique.length, source);
+    return { count: unique.length, pending: false };
+  } catch (error) {
+    if (isBrightDataPending(error)) {
+      checked(
+        await db.from("provider_jobs").upsert(
+          {
+            project_id: j.project_id,
+            user_id: j.user_id,
+            social_account_id: a.id,
+            provider: "Bright Data",
+            platform: p,
+            external_job_id: error.snapshotId,
+            status: "processing",
+            next_retry_at: new Date(Date.now() + 10 * 60000).toISOString(),
+            updated_at: stamp(),
+          },
+          { onConflict: "provider,external_job_id" },
+        ),
+      );
+      checked(
+        await db
+          .from("social_accounts")
+          .update({
+            last_sync_status: "processing",
+            provider: source,
+            last_sync_error: null,
+          })
+          .eq("id", a.id),
+      );
+      return { count: 0, pending: true };
+    }
+    checked(
+      await db
+        .from("social_accounts")
+        .update({
+          last_sync_status: "failed",
+          last_sync_error: "Collection failed; retry scheduled.",
+          provider: source,
+        })
+        .eq("id", a.id),
+    );
+    throw error;
+  }
 }
 
-async function syncEvent(db:any, payload:any) { await db.from("sync_events").insert(payload); }
-
-async function markAccount(db:any, account:any, status:string, error?:string|null, externalId?:string|null, imported=0) {
-  const completed=status==="success" || status==="no_data";
-  const processing=status==="processing";
-  const patch:any={ last_synced_at:now(), last_sync_status:status, last_sync_error:error||null, updated_at:now(), provider:providerFor(String(account.platform||"").toLowerCase()) };
-  if(externalId) patch.external_id=externalId;
-  if(completed){ patch.last_successful_sync=now(); patch.consecutive_failures=0; patch.next_retry_at=null; patch.records_imported=num(account.records_imported)+imported; }
-  else if(processing){ patch.next_retry_at=new Date(Date.now()+30*60_000).toISOString(); }
-  else { const failures=num(account.consecutive_failures)+1; patch.consecutive_failures=failures; patch.next_retry_at=new Date(Date.now()+Math.min(6*60, Math.pow(2,Math.min(failures,5))*10)*60_000).toISOString(); }
-  await db.from("social_accounts").update(patch).eq("id",account.id);
+async function enrich(db: DB, j: PipelineJob) {
+  const rows =
+    checked(
+      await db
+        .from("mentions")
+        .select("id,content")
+        .eq("project_id", j.project_id)
+        .eq("is_test", false)
+        .is("enriched_at", null)
+        .not("content", "is", null)
+        .neq("quality_status", "incomplete")
+        .order("id")
+        .limit(25),
+    ) || [];
+  if (!rows.length) return 0;
+  const props = {
+    id: { type: "string" },
+    sentiment: { type: "string", enum: sentiments },
+    confidence: { type: "number" },
+    emotion: {
+      type: "string",
+      enum: [
+        "joy",
+        "anger",
+        "sadness",
+        "fear",
+        "surprise",
+        "disgust",
+        "neutral",
+      ],
+    },
+    topics: { type: "array", items: { type: "string" } },
+  };
+  const result = await generate(
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["items"],
+      properties: {
+        items: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: Object.keys(props),
+            properties: props,
+          },
+        },
+      },
+    },
+    "Classify sentiment toward the discussed subject into five levels, including Arabic/Gulf dialect and sarcasm. Return one result for every ID, confidence 0–1, dominant emotion, and at most three short topics.",
+    rows.map((m) => ({ ...m, content: String(m.content).slice(0, 2000) })),
+    j.locale,
+  );
+  const valid = new Set(rows.map((x) => x.id)),
+    seen = new Set<string>();
+  if (!Array.isArray(result.items) || result.items.length !== rows.length)
+    throw new Error("Incomplete enrichment");
+  for (const x of result.items) {
+    if (
+      !valid.has(x.id) ||
+      seen.has(x.id) ||
+      !sentiments.includes(x.sentiment) ||
+      !Number.isFinite(x.confidence) ||
+      !Array.isArray(x.topics) ||
+      x.topics.some((v: unknown) => typeof v !== "string")
+    )
+      throw new Error("Invalid enrichment");
+    seen.add(x.id);
+  }
+  checked(
+    await db.rpc("metrix_apply_enrichment", {
+      p_project: j.project_id,
+      p_user: j.user_id,
+      p_items: result.items,
+    }),
+  );
+  await recordUsage(db, j, "ai_enrichment", rows.length, "OpenAI");
+  return rows.length;
+}
+async function insights(db: DB, j: PipelineJob) {
+  if (
+    checked(
+      await db
+        .from("project_insights")
+        .select("id")
+        .eq("generation_key", j.id)
+        .maybeSingle(),
+    )
+  )
+    return;
+  const rows =
+    checked(
+      await db
+        .from("mentions")
+        .select("id,platform,content,sentiment,likes,shares,replies,views")
+        .eq("project_id", j.project_id)
+        .eq("is_test", false)
+        .order("published_at", { ascending: false })
+        .limit(100),
+    ) || [];
+  if (!rows.length) return;
+  const value = validateInsight(
+    await generate(
+      insightSchema,
+      "Create an evidence-based executive summary, recurring topics, positive/negative drivers, risks, opportunities and recommendations. State uncertainty. Empty lists are valid when evidence is insufficient.",
+      rows.map((x) => ({
+        ...x,
+        content: String(x.content || "").slice(0, 1200),
+      })),
+      j.locale,
+    ),
+  );
+  checked(
+    await db.from("project_insights").insert({
+      ...value,
+      project_id: j.project_id,
+      user_id: j.user_id,
+      generation_key: j.id,
+      mentions_analyzed: rows.length,
+      generated_at: stamp(),
+    }),
+  );
+  await recordUsage(db, j, "ai_project_insight", 1, "OpenAI");
+}
+async function metrics(db: DB, j: PipelineJob) {
+  const rows =
+    checked(
+      await db.rpc("metrix_daily_metrics", {
+        p_project: j.project_id,
+        p_days: 180,
+      }),
+    ) || [];
+  if (rows.length)
+    checked(
+      await db.from("project_daily_metrics").upsert(
+        rows.map((r: any) => ({
+          ...r,
+          project_id: j.project_id,
+          user_id: j.user_id,
+        })),
+        { onConflict: "project_id,metric_date" },
+      ),
+    );
+}
+async function alerts(db: DB, j: PipelineJob) {
+  const s = checked(
+    await db
+      .from("project_settings")
+      .select("*")
+      .eq("project_id", j.project_id)
+      .maybeSingle(),
+  );
+  const now = Date.now(),
+    day = 86400000,
+    days = s?.comparison_window_days || 7;
+  const query = (from: number, to: number) =>
+    db
+      .from("mentions")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", j.project_id)
+      .eq("is_test", false)
+      .gte("published_at", new Date(from).toISOString())
+      .lt("published_at", new Date(to).toISOString());
+  const results = await Promise.all([
+    query(now - day, now),
+    query(now - day, now).not("sentiment", "is", null),
+    query(now - day, now).in("sentiment", ["negative", "very_negative"]),
+    query(now - (days + 1) * day, now - day),
+  ]);
+  results.forEach((r) => checked(r));
+  const [volume, analyzed, negative, prior] = results.map((r) => r.count || 0),
+    percent = analyzed ? (negative / analyzed) * 100 : 0,
+    baseline = prior / days;
+  const entries: any[] = [];
+  if (analyzed >= 10 && percent >= (s?.negative_threshold ?? 40))
+    entries.push({
+      alert_type: "negative_sentiment",
+      severity: percent >= 50 ? "high" : "medium",
+      title:
+        j.locale === "ar"
+          ? "ارتفاع نسبة المشاعر السلبية"
+          : "Negative sentiment threshold reached",
+      description: `${percent.toFixed(1)}% (${negative}/${analyzed})`,
+      metadata: {
+        percent,
+        negative_mentions: negative,
+        analyzed_mentions: analyzed,
+      },
+    });
+  if (
+    s?.anomaly_alerts_enabled !== false &&
+    baseline >= 2 &&
+    volume >= baseline * (s?.spike_multiplier ?? 1.5)
+  )
+    entries.push({
+      alert_type: "conversation_spike",
+      severity: volume >= baseline * 3 ? "high" : "medium",
+      title: j.locale === "ar" ? "ارتفاع حجم المحادثات" : "Conversation spike",
+      description: `${volume} / ${baseline.toFixed(1)}`,
+      metadata: {
+        multiplier: volume / baseline,
+        baseline_mentions: prior,
+        baseline_days: days,
+      },
+    });
+  for (const e of entries)
+    checked(
+      await db.from("project_alerts").upsert(
+        {
+          ...e,
+          project_id: j.project_id,
+          user_id: j.user_id,
+          dedupe_key: `${e.alert_type}:${stamp().slice(0, 10)}`,
+          detected_at: stamp(),
+          is_active: true,
+        },
+        { onConflict: "project_id,dedupe_key", ignoreDuplicates: true },
+      ),
+    );
+  return entries.length;
+}
+async function email(db: DB, j: PipelineJob) {
+  const s = checked(
+    await db
+      .from("project_settings")
+      .select("email_alerts_enabled,alert_email")
+      .eq("project_id", j.project_id)
+      .maybeSingle(),
+  );
+  if (!s?.email_alerts_enabled || !s.alert_email) return;
+  const alerts =
+    checked(
+      await db
+        .from("project_alerts")
+        .select("id,title,description,detected_at")
+        .eq("project_id", j.project_id)
+        .eq("is_active", true)
+        .is("email_sent_at", null)
+        .in("severity", ["high", "critical"])
+        .gte("detected_at", new Date(Date.now() - 86400000).toISOString())
+        .order("detected_at")
+        .limit(1),
+    ) || [];
+  if (
+    alerts.length &&
+    (!process.env.RESEND_API_KEY || !process.env.ALERT_FROM_EMAIL)
+  )
+    throw new Error("Alert email is not configured");
+  for (const a of alerts) {
+    await fetchJson("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+        "Idempotency-Key": `metrix-alert-${a.id}`,
+      },
+      body: JSON.stringify({
+        from: process.env.ALERT_FROM_EMAIL,
+        to: [s.alert_email],
+        subject: a.title,
+        html: `<h2>${escapeHtml(a.title)}</h2><p>${escapeHtml(a.description)}</p>`,
+      }),
+    });
+    checked(
+      await db
+        .from("project_alerts")
+        .update({ email_sent_at: stamp() })
+        .eq("id", a.id),
+    );
+  }
+  return alerts.length > 0;
+}
+async function summary(db: DB, j: PipelineJob) {
+  const s = checked(
+    await db
+      .from("project_settings")
+      .select("daily_summary_enabled")
+      .eq("project_id", j.project_id)
+      .maybeSingle(),
+  );
+  if (s?.daily_summary_enabled === false) return;
+  const date = stamp().slice(0, 10);
+  if (
+    checked(
+      await db
+        .from("daily_project_summaries")
+        .select("id")
+        .eq("project_id", j.project_id)
+        .eq("summary_date", date)
+        .maybeSingle(),
+    )
+  )
+    return;
+  const rows =
+    checked(
+      await db
+        .from("mentions")
+        .select("content,sentiment,platform")
+        .eq("project_id", j.project_id)
+        .eq("is_test", false)
+        .gte("published_at", new Date(Date.now() - 86400000).toISOString())
+        .order("published_at", { ascending: false })
+        .limit(100),
+    ) || [];
+  if (!rows.length) return;
+  const x = validateInsight(
+    await generate(
+      insightSchema,
+      "Summarize the last 24 hours using this sample only.",
+      rows.map((r) => ({
+        ...r,
+        content: String(r.content || "").slice(0, 1200),
+      })),
+      j.locale,
+    ),
+  );
+  checked(
+    await db.from("daily_project_summaries").upsert(
+      {
+        project_id: j.project_id,
+        user_id: j.user_id,
+        summary_date: date,
+        executive_summary: x.executive_summary,
+        highlights: x.top_topics,
+        risks: x.risks,
+        opportunities: x.opportunities,
+        recommendations: x.recommendations,
+        metrics: { sample_size: rows.length, window: "24h" },
+      },
+      { onConflict: "project_id,summary_date" },
+    ),
+  );
+  await recordUsage(db, j, "ai_daily_summary", 1, "OpenAI");
 }
 
-function pendingSnapshotId(error:any) {
-  if(error?.snapshotId) return String(error.snapshotId);
-  const m=String(error?.message||error||"").match(/snapshot\s+([^\s.]+).*processing/i); return m?.[1]||null;
-}
-
-async function collectAccount(db:any, account:any) {
-  const p=String(account.platform||"").toLowerCase();
-  if(["facebook","linkedin","google_maps"].includes(p)){
-    const {data:job}=await db.from("provider_jobs").select("*").eq("social_account_id",account.id).eq("status","processing").order("created_at",{ascending:false}).limit(1).maybeSingle();
-    if(job?.external_job_id){
-      try{
-        const result=await resumeBrightDataSnapshot(job.external_job_id,p,account.handle);
-        const providerMeta=(result as any).providerMeta||{};
-        await db.from("provider_jobs").update({
-          status:"completed",
-          completed_at:now(),
-          updated_at:now(),
-          attempts:num(job.attempts)+1,
-          last_error:null,
-          returned_rows:num(providerMeta.returned),
-          normalized_rows:num(providerMeta.normalized),
-          failed_rows:num(providerMeta.failed),
-          response_sample:providerMeta.rawSample||null
-        }).eq("id",job.id);
-        return result;
-      }catch(e:any){
-        const msg=String(e?.message||e);
-        await db.from("provider_jobs").update({attempts:num(job.attempts)+1,last_error:msg,next_retry_at:new Date(Date.now()+30*60_000).toISOString(),updated_at:now()}).eq("id",job.id);
-        throw e;
+export async function executeStage(
+  j: PipelineJob,
+): Promise<{ state: State; done: boolean }> {
+  const db = createAdminClient(),
+    state = { ...j.state };
+  // Revalidate ownership even for jobs created before an account/project change.
+  if (
+    !checked(
+      await db
+        .from("projects")
+        .select("id")
+        .eq("id", j.project_id)
+        .eq("user_id", j.user_id)
+        .maybeSingle(),
+    )
+  )
+    throw new Error("Project not found");
+  if (!state.runId) {
+    checked(
+      await db.from("pipeline_runs").upsert(
+        {
+          id: j.id,
+          project_id: j.project_id,
+          user_id: j.user_id,
+          status: "running",
+          details: { mode: j.mode },
+        },
+        { onConflict: "id", ignoreDuplicates: true },
+      ),
+    );
+    state.runId = j.id;
+  }
+  if (state.stage === "collect") {
+    if (!state.accounts)
+      state.accounts =
+        checked(
+          await db
+            .from("social_accounts")
+            .select("*")
+            .eq("project_id", j.project_id)
+            .eq("user_id", j.user_id)
+            .eq("enabled", true)
+            .order("id"),
+        ) || [];
+    const a = state.accounts[state.account];
+    if (a) {
+      const live = checked(
+        await db
+          .from("social_accounts")
+          .select("*")
+          .eq("id", a.id)
+          .eq("project_id", j.project_id)
+          .eq("handle", a.handle)
+          .eq("enabled", true)
+          .maybeSingle(),
+      );
+      if (
+        live &&
+        (j.mode !== "recover" || provider(live.platform) === "Bright Data")
+      ) {
+        const r = await collect(db, j, live);
+        state.imported = (state.imported || 0) + r.count;
+        state.pending = (state.pending || 0) + Number(r.pending);
       }
-    }
+      state.account++;
+    } else state.stage = "enrich";
+  } else if (state.stage === "enrich") {
+    const count = await enrich(db, j);
+    state.analyzed = (state.analyzed || 0) + count;
+    state.batches = (state.batches || 0) + 1;
+    // Bound one run's spend; remaining records are resumed by the next run.
+    if (count === 0 || state.batches >= 10) state.stage = "insights";
+  } else if (state.stage === "insights") {
+    await insights(db, j);
+    state.stage = "metrics";
+  } else if (state.stage === "metrics") {
+    await metrics(db, j);
+    state.stage = "alerts";
+  } else if (state.stage === "alerts") {
+    state.alerts = await alerts(db, j);
+    state.stage = "email";
+  } else if (state.stage === "email") {
+    if (!(await email(db, j))) state.stage = "summary";
+  } else if (state.stage === "summary") {
+    await summary(db, j);
+    state.stage = "retention";
+  } else if (state.stage === "retention") {
+    const s = checked(
+      await db
+        .from("project_settings")
+        .select("retention_days")
+        .eq("project_id", j.project_id)
+        .maybeSingle(),
+    );
+    checked(
+      await db.rpc("metrix_apply_retention", {
+        p_project_id: j.project_id,
+        p_days: s?.retention_days || 365,
+      }),
+    );
+    state.stage = "done";
   }
-  if(p==="facebook") return collectFacebook(account.handle);
-  if(p==="linkedin") return collectLinkedIn(account.handle);
-  if(p==="google_maps") return collectGoogleMapsReviews(account.handle);
-  return collectFromEnsembleData(account as SocialAccount);
-}
-
-async function persistProviderJob(db:any, projectId:string,userId:string,account:any,error:any){
-  const snapshotId=pendingSnapshotId(error); if(!snapshotId) return null;
-  await db.from("provider_jobs").upsert({ project_id:projectId,user_id:userId,social_account_id:account.id,provider:"Bright Data",platform:account.platform,external_job_id:snapshotId,status:"processing",requested_rows:1,next_retry_at:new Date(Date.now()+10*60_000).toISOString(),last_error:String(error?.message||error),updated_at:now() },{onConflict:"provider,external_job_id"});
-  return snapshotId;
-}
-
-async function upsertMention(db:any, projectId:string,userId:string,account:any,m:any){
-  const raw=m.raw_data||null;
-  const content=recoverContent(raw, String(m.content||"")).trim();
-  const meta=extractTextMetadata(content);
-  const media=inferMedia(raw||{});
-  const hash=contentHash(m.platform,content,m.author_username);
-  const lang=detectLanguageHeuristic(content);
-  const quality=/^\[(Instagram|Threads|TikTok|YouTube|Facebook|LinkedIn|Reddit).*\]$/i.test(content) ? "placeholder" : content.length<2 ? "incomplete" : "ok";
-  const engagement=num(m.likes)+num(m.shares)+num(m.replies);
-  const ageHours=Math.max(1,(Date.now()-new Date(m.published_at||Date.now()).getTime())/3600000);
-  const virality=Math.round((engagement/Math.sqrt(ageHours))*100)/100;
-  const payload:any={ user_id:userId,project_id:projectId,social_account_id:account.id,keyword_id:null,platform:m.platform,external_id:m.external_id,author_name:m.author_name,author_username:m.author_username,content,post_url:m.post_url,published_at:m.published_at,likes:num(m.likes),shares:num(m.shares),replies:num(m.replies),views:num(m.views),raw_data:raw,media_type:m.media_type||media.mediaType,media_url:m.media_url||media.mediaUrl,thumbnail_url:m.thumbnail_url||media.thumbnailUrl,media_count:media.mediaCount,media_duration_seconds:media.duration,location:authorSignals(raw||{}).location,hashtags:meta.hashtags,mentioned_users:meta.mentionedUsers,outbound_urls:meta.outboundUrls,outbound_domains:meta.outboundDomains,content_hash:hash,detected_language:lang,last_seen_at:now(),updated_at:now(),virality_score:virality,quality_status:quality };
-  const {data:existing}=await db.from("mentions").select("id,sentiment,first_seen_at").eq("project_id",projectId).eq("external_id",m.external_id).maybeSingle();
-  let id:string; let inserted=0,updated=0;
-  if(existing?.id){ id=existing.id; const {error}=await db.from("mentions").update(payload).eq("id",id); if(error) throw error; updated=1; }
-  else {
-    const {data,error}=await db.from("mentions").insert({...payload, sentiment:null, language:lang, first_seen_at:now()}).select("id").single();
-    if(error){ if(String(error.code)==="23505") return {inserted:0,updated:0}; throw error; }
-    id=data.id; inserted=1;
-  }
-  await db.from("mention_metrics_history").insert({mention_id:id,project_id:projectId,user_id:userId,likes:num(m.likes),shares:num(m.shares),replies:num(m.replies),views:num(m.views),captured_at:now()});
-  const sig=authorSignals(raw||{});
-  if(m.author_username && (sig.followers!==null || sig.following!==null || sig.verified!==null)){
-    const influence=(num(sig.followers)*0.6)+(engagement*0.4);
-    await db.from("author_snapshots").insert({project_id:projectId,user_id:userId,social_account_id:account.id,platform:m.platform,author_username:m.author_username,author_name:m.author_name,followers:sig.followers,following:sig.following,verified:sig.verified,biography:sig.biography,account_category:sig.category,location:sig.location,influence_score:influence,raw_data:raw,captured_at:now()});
-  }
-  return {inserted,updated,id};
-}
-
-async function analyzeEnrichment(db:any,projectId:string,userId:string){
-  const key=process.env.OPENAI_API_KEY; if(!key) return 0;
-  let analyzed=0;
-  for(let batch=0;batch<5;batch++){
-    const {data:rows}=await db.from("mentions").select("id,content,detected_language").eq("project_id",projectId).is("sentiment",null).not("content","is",null).neq("quality_status","incomplete").limit(50);
-    if(!rows?.length) break;
-    const r=await fetch("https://api.openai.com/v1/responses",{method:"POST",headers:{Authorization:`Bearer ${key}`,"Content-Type":"application/json"},body:JSON.stringify({model:"gpt-5.6-luna",store:false,input:"Analyze each social-media item. Handle Arabic, Saudi/Gulf dialect, English, code-switching, emoji and sarcasm. Classify sentiment into exactly five levels: very_positive, positive, neutral, negative, very_negative. Return sentiment, confidence 0-1, language (ar/en/mixed/other), dominant emotion, emotion confidence, and up to 3 concise topical labels. Return exactly one result per id.\n"+JSON.stringify(rows),text:{format:{type:"json_schema",name:"metrix_enrichment",strict:true,schema:{type:"object",additionalProperties:false,required:["items"],properties:{items:{type:"array",items:{type:"object",additionalProperties:false,required:["id","sentiment","confidence","language","emotion","emotion_confidence","topics"],properties:{id:{type:"string"},sentiment:{type:"string",enum:["very_positive","positive","neutral","negative","very_negative"]},confidence:{type:"number"},language:{type:"string",enum:["ar","en","mixed","other"]},emotion:{type:"string",enum:["joy","anger","sadness","fear","surprise","disgust","neutral"]},emotion_confidence:{type:"number"},topics:{type:"array",items:{type:"string"}}}}}}}}}}) });
-    if(!r.ok){console.error("AI enrichment",await r.text());break;}
-    let parsed:any={items:[]}; try{parsed=JSON.parse(outputText(await r.json())||'{"items":[]}')}catch{}
-    for(const x of parsed.items||[]){
-      const {error}=await db.from("mentions").update({sentiment:x.sentiment,sentiment_confidence:Math.max(0,Math.min(1,num(x.confidence))),emotion:x.emotion,emotion_confidence:Math.max(0,Math.min(1,num(x.emotion_confidence))),language:x.language,detected_language:x.language,updated_at:now()}).eq("project_id",projectId).eq("id",x.id);
-      if(!error){ analyzed++; for(const topic of (x.topics||[]).slice(0,3)){ const clean=String(topic).trim().slice(0,80); if(clean) await db.from("mention_topics").upsert({mention_id:x.id,project_id:projectId,user_id:userId,topic:clean,score:1,last_seen_at:now()},{onConflict:"mention_id,topic"}); }}
-    }
-  }
-  if(analyzed) await usage(db,projectId,userId,"ai_enrichment",analyzed,"OpenAI");
-  return analyzed;
-}
-
-async function refreshInsights(db:any,projectId:string,userId:string){
-  const key=process.env.OPENAI_API_KEY;if(!key)return;
-  const {data:mentions}=await db.from("mentions").select("platform,content,sentiment,emotion,likes,shares,replies,views,published_at").eq("project_id",projectId).order("published_at",{ascending:false}).limit(150);
-  if(!mentions?.length)return;
-  const r=await fetch("https://api.openai.com/v1/responses",{method:"POST",headers:{Authorization:`Bearer ${key}`,"Content-Type":"application/json"},body:JSON.stringify({model:"gpt-5.6-luna",store:false,input:"You are metriX social intelligence. Produce evidence-based executive summary, top topics, positive drivers, negative drivers, risks, opportunities and recommendations. Never invent missing facts.\n"+JSON.stringify(mentions),text:{format:{type:"json_schema",name:"project_insights",strict:true,schema:{type:"object",additionalProperties:false,required:["executive_summary","top_topics","positive_drivers","negative_drivers","risks","opportunities","recommendations"],properties:{executive_summary:{type:"string"},top_topics:{type:"array",items:{type:"string"}},positive_drivers:{type:"array",items:{type:"string"}},negative_drivers:{type:"array",items:{type:"string"}},risks:{type:"array",items:{type:"string"}},opportunities:{type:"array",items:{type:"string"}},recommendations:{type:"array",items:{type:"string"}}}}}}})});
-  if(!r.ok)return; let parsed:any;try{parsed=JSON.parse(outputText(await r.json())||"{}")}catch{return}
-  const payload={...parsed,mentions_analyzed:mentions.length,generated_at:now()};
-  const {data:existing}=await db.from("project_insights").select("id").eq("project_id",projectId).maybeSingle();
-  if(existing?.id) await db.from("project_insights").update({insights:payload,updated_at:now()}).eq("id",existing.id); else await db.from("project_insights").insert({project_id:projectId,user_id:userId,insights:payload,created_at:now(),updated_at:now()});
-  await usage(db,projectId,userId,"ai_project_insight",1,"OpenAI");
-}
-
-async function recordDailyMetrics(db:any,projectId:string,userId:string){
-  const start=new Date();start.setUTCHours(0,0,0,0); const date=start.toISOString().slice(0,10);
-  const {data:rows}=await db.from("mentions").select("sentiment,likes,shares,replies,views").eq("project_id",projectId).gte("published_at",start.toISOString());
-  const a=rows||[]; const payload={project_id:projectId,user_id:userId,metric_date:date,mentions:a.length,engagement:a.reduce((s:any,m:any)=>s+num(m.likes)+num(m.shares)+num(m.replies),0),views:a.reduce((s:any,m:any)=>s+num(m.views),0),positive:a.filter((m:any)=>m.sentiment==="positive"||m.sentiment==="very_positive").length,neutral:a.filter((m:any)=>m.sentiment==="neutral").length,negative:a.filter((m:any)=>m.sentiment==="negative"||m.sentiment==="very_negative").length};
-  await db.from("project_daily_metrics").upsert(payload,{onConflict:"project_id,metric_date"}); return payload;
-}
-
-async function createAlerts(db:any,projectId:string,userId:string){
-  const {data:settings}=await db.from("project_settings").select("negative_threshold,anomaly_alerts_enabled").eq("project_id",projectId).maybeSingle();
-  const threshold=num(settings?.negative_threshold)||30;
-  const {data:recent}=await db.from("mentions").select("id,platform,content,sentiment,likes,shares,replies,views,published_at,virality_score").eq("project_id",projectId).gte("published_at",new Date(Date.now()-24*3600000).toISOString()).order("published_at",{ascending:false}).limit(500);
-  const r=recent||[]; const analyzed=r.filter((m:any)=>m.sentiment); const neg=analyzed.filter((m:any)=>m.sentiment==="negative"||m.sentiment==="very_negative"); const negPct=analyzed.length?neg.length/analyzed.length*100:0; let alerts=0;
-  async function add(key:string,severity:string,title:string,description:string,metadata:any){ const {error}=await db.from("project_alerts").insert({project_id:projectId,user_id:userId,severity,title,description,metadata,dedupe_key:key,created_at:now()}); if(!error)alerts++; }
-  if(analyzed.length>=10&&negPct>=threshold) await add(`negative:${new Date().toISOString().slice(0,10)}`,negPct>=50?"high":"medium","Negative sentiment threshold reached",`${Math.round(negPct)}% of the latest analyzed items are negative.`,{negative_percentage:negPct,analyzed:analyzed.length});
-  const viral=[...r].sort((a:any,b:any)=>num(b.virality_score)-num(a.virality_score)).filter((m:any)=>num(m.virality_score)>=20).slice(0,3);
-  for(const m of viral) await add(`viral:${m.id}`,m.sentiment==="negative"?"high":"medium",`Fast-growing ${m.platform} content`,String(m.content||"").slice(0,500),{mention_id:m.id,virality_score:m.virality_score,sentiment:m.sentiment});
-  if(settings?.anomaly_alerts_enabled!==false){
-    const prevStart=new Date(Date.now()-8*24*3600000).toISOString(), prevEnd=new Date(Date.now()-24*3600000).toISOString();
-    const {count:priorCount}=await db.from("mentions").select("id",{count:"exact",head:true}).eq("project_id",projectId).gte("published_at",prevStart).lt("published_at",prevEnd);
-    const baseline=(num(priorCount)/7)||0; const spike=baseline?((r.length-baseline)/baseline)*100:0;
-    if(baseline>=2&&spike>=80) await add(`spike:${new Date().toISOString().slice(0,10)}`,spike>=180?"high":"medium",negPct>=threshold?"Conversation spike + negative sentiment shift":"Conversation spike detected",`Mentions are ${Math.round(spike)}% above the previous 7-day daily baseline.${negPct>=threshold?` Negative sentiment is ${Math.round(negPct)}%.`:""}`,{today:r.length,daily_baseline:baseline,spike_percentage:spike,negative_percentage:negPct});
-  }
-  return alerts;
-}
-
-async function dailySummary(db:any,projectId:string,userId:string,metrics:any){
-  const {data:settings}=await db.from("project_settings").select("daily_summary_enabled").eq("project_id",projectId).maybeSingle(); if(settings?.daily_summary_enabled===false)return;
-  const key=process.env.OPENAI_API_KEY;if(!key)return;
-  const start=new Date(Date.now()-24*3600000).toISOString();
-  const {data:mentions}=await db.from("mentions").select("platform,content,sentiment,emotion,likes,shares,replies,views,published_at").eq("project_id",projectId).gte("published_at",start).order("published_at",{ascending:false}).limit(120);
-  if(!mentions?.length)return;
-  const r=await fetch("https://api.openai.com/v1/responses",{method:"POST",headers:{Authorization:`Bearer ${key}`,"Content-Type":"application/json"},body:JSON.stringify({model:"gpt-5.6-luna",store:false,input:"Create a concise daily executive social-intelligence brief. Use only the supplied evidence.\nMetrics:"+JSON.stringify(metrics)+"\nItems:"+JSON.stringify(mentions),text:{format:{type:"json_schema",name:"daily_summary",strict:true,schema:{type:"object",additionalProperties:false,required:["executive_summary","highlights","risks","opportunities","recommendations"],properties:{executive_summary:{type:"string"},highlights:{type:"array",items:{type:"string"}},risks:{type:"array",items:{type:"string"}},opportunities:{type:"array",items:{type:"string"}},recommendations:{type:"array",items:{type:"string"}}}}}}})});
-  if(!r.ok)return;let x:any;try{x=JSON.parse(outputText(await r.json())||"{}")}catch{return}
-  await db.from("daily_project_summaries").upsert({project_id:projectId,user_id:userId,summary_date:new Date().toISOString().slice(0,10),executive_summary:x.executive_summary||"",highlights:x.highlights||[],risks:x.risks||[],opportunities:x.opportunities||[],recommendations:x.recommendations||[],metrics},{onConflict:"project_id,summary_date"});
-  await usage(db,projectId,userId,"ai_daily_summary",1,"OpenAI");
-}
-
-async function applyRetention(db:any,projectId:string){ const {data:s}=await db.from("project_settings").select("retention_days").eq("project_id",projectId).maybeSingle(); await db.rpc("metrix_apply_retention",{p_project_id:projectId,p_days:num(s?.retention_days)||365}); }
-
-export async function runProjectPipeline(projectId:string,userId:string){
-  const db=createAdminClient(); const started=Date.now();
-  const {data:run}=await db.from("pipeline_runs").insert({project_id:projectId,user_id:userId,status:"running",started_at:now(),details:{mode:"account_based",version:"v5"}}).select("id").single();
-  let imported=0,updated=0,analyzed=0,alerts=0; const details:Record<string,any>={};
-  try{
-    const {data:accounts,error}=await db.from("social_accounts").select("*").eq("project_id",projectId).eq("user_id",userId).eq("enabled",true); if(error)throw error;
-    for(const account of accounts||[]){ const p=String(account.platform||"").toLowerCase(),provider=providerFor(p),t0=Date.now();
-      try{
-        const result=await collectAccount(db,account); let ins=0,upd=0;
-        for(const m of result.mentions||[]){ const x=await upsertMention(db,projectId,userId,account,m); ins+=x.inserted;upd+=x.updated; }
-        imported+=ins;updated+=upd;
-        const fetched=result.mentions?.length||0;
-        const meta=(result as any).providerMeta||{};
-        const sourceStatus=fetched>0?"success":"no_data";
-        await markAccount(db,account,sourceStatus,null,result.externalId||null,ins);
-        await syncEvent(db,{project_id:projectId,user_id:userId,social_account_id:account.id,platform:account.platform,provider,status:sourceStatus,requested:num(meta.requested),returned:num(meta.returned)||fetched,normalized:num(meta.normalized)||fetched,failed:num(meta.failed),snapshot_id:meta.snapshotId||null,fetched,inserted:ins,updated:upd,duration_ms:Date.now()-t0,raw_sample:meta.rawSample||null});
-        await usage(db,projectId,userId,"provider_records",fetched,provider,{platform:p});
-        details[p]={imported:ins,updated:upd,fetched,status:sourceStatus,provider,snapshot_id:meta.snapshotId||null,returned:num(meta.returned)||fetched,normalized:num(meta.normalized)||fetched,failed:num(meta.failed)};
-      }catch(e:any){
-        const message=String(e?.message||e);
-        const snapshotId=await persistProviderJob(db,projectId,userId,account,e);
-        if(isBrightDataPending(e)||snapshotId){
-          await markAccount(db,account,"processing",message);
-          await syncEvent(db,{project_id:projectId,user_id:userId,social_account_id:account.id,platform:account.platform,provider,status:"processing",requested:1,snapshot_id:snapshotId||pendingSnapshotId(e),error:message,duration_ms:Date.now()-t0});
-          details[p]={imported:0,updated:0,status:"processing",snapshot_id:snapshotId||pendingSnapshotId(e),provider};
-        }else{
-          await markAccount(db,account,"failed",message);
-          await syncEvent(db,{project_id:projectId,user_id:userId,social_account_id:account.id,platform:account.platform,provider,status:"failed",failed:1,error:message,duration_ms:Date.now()-t0});
-          details[p]={imported:0,updated:0,status:"failed",error:message,provider};
-        }
-      }
-    }
-    analyzed=await analyzeEnrichment(db,projectId,userId); await refreshInsights(db,projectId,userId); const metrics=await recordDailyMetrics(db,projectId,userId); alerts=await createAlerts(db,projectId,userId); await dailySummary(db,projectId,userId,metrics); await applyRetention(db,projectId);
-    if(run?.id) await db.from("pipeline_runs").update({status:"success",finished_at:now(),imported,analyzed,alerts,details:{version:"v5",updated,duration_ms:Date.now()-started,platforms:details}}).eq("id",run.id);
-    return {imported,updated,analyzed,alerts,details};
-  }catch(e:any){ if(run?.id) await db.from("pipeline_runs").update({status:"failed",finished_at:now(),imported,analyzed,alerts,details:{version:"v5",updated,error:String(e?.message||e),platforms:details}}).eq("id",run.id); throw e; }
-}
-
-
-// v5.5: Check only existing Bright Data snapshots. This NEVER starts a new Bright Data scrape.
-export async function checkBrightDataSnapshots(projectId:string,userId:string){
-  const db=createAdminClient();
-  const {data:accounts,error}=await db.from("social_accounts").select("*").eq("project_id",projectId).eq("user_id",userId).eq("enabled",true).in("platform",["facebook","linkedin","google_maps"]);
-  if(error) throw error;
-  const details:Record<string,any>={};
-  let imported=0,updated=0,stillProcessing=0,failed=0;
-
-  for(const account of accounts||[]){
-    const p=String(account.platform||"").toLowerCase();
-    const {data:job}=await db.from("provider_jobs").select("*").eq("social_account_id",account.id).eq("provider","Bright Data").not("external_job_id","is",null).order("created_at",{ascending:false}).limit(1).maybeSingle();
-    if(!job?.external_job_id){
-      details[p]={status:"no_existing_snapshot"};
-      continue;
-    }
-
-    const t0=Date.now();
-    try{
-      const result=await resumeBrightDataSnapshot(job.external_job_id,p,account.handle);
-      const meta=(result as any).providerMeta||{};
-      let ins=0,upd=0;
-      for(const m of result.mentions||[]){
-        const x=await upsertMention(db,projectId,userId,account,m);
-        ins+=x.inserted; upd+=x.updated;
-      }
-      imported+=ins; updated+=upd;
-      const fetched=result.mentions?.length||0;
-      const sourceStatus=fetched>0?"success":"no_data";
-      await db.from("provider_jobs").update({
-        status:"completed",completed_at:now(),updated_at:now(),attempts:num(job.attempts)+1,last_error:null,
-        returned_rows:num(meta.returned)||fetched,normalized_rows:num(meta.normalized)||fetched,failed_rows:num(meta.failed),response_sample:meta.rawSample||null
-      }).eq("id",job.id);
-      await markAccount(db,account,sourceStatus,null,result.externalId||null,ins);
-      await syncEvent(db,{project_id:projectId,user_id:userId,social_account_id:account.id,platform:account.platform,provider:"Bright Data",status:sourceStatus,requested:0,returned:num(meta.returned)||fetched,normalized:num(meta.normalized)||fetched,failed:num(meta.failed),snapshot_id:job.external_job_id,fetched,inserted:ins,updated:upd,duration_ms:Date.now()-t0,raw_sample:meta.rawSample||null});
-      await usage(db,projectId,userId,"provider_records",fetched,"Bright Data",{platform:p,mode:"snapshot_resume"});
-      details[p]={status:sourceStatus,snapshot_id:job.external_job_id,returned:num(meta.returned)||fetched,normalized:num(meta.normalized)||fetched,inserted:ins,updated:upd,failed:num(meta.failed)};
-    }catch(e:any){
-      const message=String(e?.message||e);
-      if(isBrightDataPending(e)){
-        stillProcessing++;
-        await db.from("provider_jobs").update({attempts:num(job.attempts)+1,last_error:message,next_retry_at:new Date(Date.now()+10*60_000).toISOString(),updated_at:now()}).eq("id",job.id);
-        await markAccount(db,account,"processing",message);
-        await syncEvent(db,{project_id:projectId,user_id:userId,social_account_id:account.id,platform:account.platform,provider:"Bright Data",status:"processing",requested:0,snapshot_id:job.external_job_id,error:message,duration_ms:Date.now()-t0});
-        details[p]={status:"processing",snapshot_id:job.external_job_id};
-      }else{
-        failed++;
-        await db.from("provider_jobs").update({status:"failed",attempts:num(job.attempts)+1,last_error:message,updated_at:now()}).eq("id",job.id);
-        await markAccount(db,account,"failed",message);
-        await syncEvent(db,{project_id:projectId,user_id:userId,social_account_id:account.id,platform:account.platform,provider:"Bright Data",status:"failed",requested:0,failed:1,snapshot_id:job.external_job_id,error:message,duration_ms:Date.now()-t0});
-        details[p]={status:"failed",snapshot_id:job.external_job_id,error:message};
-      }
-    }
-  }
-
-  // Enrich any newly imported records, without creating new provider requests.
-  let analyzed=0;
-  if(imported>0){
-    analyzed=await analyzeEnrichment(db,projectId,userId);
-    await refreshInsights(db,projectId,userId);
-    const metrics=await recordDailyMetrics(db,projectId,userId);
-    await createAlerts(db,projectId,userId);
-    await dailySummary(db,projectId,userId,metrics);
-  }
-  return {imported,updated,analyzed,stillProcessing,failed,details};
+  const done = state.stage === "done";
+  checked(
+    await db
+      .from("pipeline_runs")
+      .update({
+        status: done ? (state.pending ? "partial" : "success") : "running",
+        imported: state.imported || 0,
+        analyzed: state.analyzed || 0,
+        alerts: state.alerts || 0,
+        finished_at: done ? stamp() : null,
+        details: {
+          mode: j.mode,
+          stage: state.stage,
+          pending: state.pending || 0,
+          records_refreshed: state.imported || 0,
+        },
+      })
+      .eq("id", state.runId),
+  );
+  return { state, done };
 }

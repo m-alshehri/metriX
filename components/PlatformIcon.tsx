@@ -37,7 +37,10 @@ export default function PlatformIcon({
   size?: number;
   className?: string;
 }) {
-  const key = String(platform || "").toLowerCase().trim().replace(/[\s-]+/g, "_");
+  const key = String(platform || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[\s-]+/g, "_");
   const slug = slugs[key];
   const title = titles[slug] || String(platform || "Platform");
 
@@ -64,7 +67,10 @@ export default function PlatformIcon({
         aria-label={title}
         className={`inline-flex items-center justify-center text-zinc-600 ${className}`}
       >
-        <span className="rounded-full bg-current opacity-70" style={{ width: size * 0.72, height: size * 0.72 }} />
+        <span
+          className="rounded-full bg-current opacity-70"
+          style={{ width: size * 0.72, height: size * 0.72 }}
+        />
       </span>
     );
   }

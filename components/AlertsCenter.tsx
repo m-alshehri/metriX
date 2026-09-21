@@ -7,8 +7,10 @@ type Props = {
 
 function severityClasses(severity: string) {
   if (severity === "critical") return "bg-red-50 text-red-700 border-red-200";
-  if (severity === "high") return "bg-orange-50 text-orange-700 border-orange-200";
-  if (severity === "medium") return "bg-amber-50 text-amber-700 border-amber-200";
+  if (severity === "high")
+    return "bg-orange-50 text-orange-700 border-orange-200";
+  if (severity === "medium")
+    return "bg-amber-50 text-amber-700 border-amber-200";
   return "bg-zinc-50 text-zinc-700 border-zinc-200";
 }
 
@@ -51,7 +53,7 @@ function evidence(metadata: any, ar: boolean) {
 }
 
 export default async function AlertsCenter({ projectId, locale }: Props) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -61,7 +63,7 @@ export default async function AlertsCenter({ projectId, locale }: Props) {
   const { data: alerts } = await supabase
     .from("project_alerts")
     .select(
-      "id,alert_type,severity,title,description,metadata,is_active,detected_at,email_sent_at"
+      "id,alert_type,severity,title,description,metadata,is_active,detected_at,email_sent_at",
     )
     .eq("project_id", projectId)
     .order("detected_at", { ascending: false })
@@ -71,7 +73,10 @@ export default async function AlertsCenter({ projectId, locale }: Props) {
   const ar = locale === "ar";
 
   return (
-    <section id="alerts-center" className="mt-10 rounded-[2rem] border bg-white p-7 shadow-sm">
+    <section
+      id="alerts-center"
+      className="mt-10 rounded-[2rem] border bg-white p-7 shadow-sm"
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <div className="text-sm uppercase tracking-[0.18em] text-metrix-700">
@@ -110,7 +115,7 @@ export default async function AlertsCenter({ projectId, locale }: Props) {
                     <div className="flex flex-wrap items-center gap-2">
                       <span
                         className={`rounded-full border px-3 py-1 text-sm uppercase ${severityClasses(
-                          String(alert.severity)
+                          String(alert.severity),
                         )}`}
                       >
                         {alert.severity}
@@ -130,8 +135,8 @@ export default async function AlertsCenter({ projectId, locale }: Props) {
                             ? "نشط"
                             : "Active"
                           : ar
-                          ? "منتهي"
-                          : "Resolved"}
+                            ? "منتهي"
+                            : "Resolved"}
                       </span>
                     </div>
 
@@ -144,7 +149,7 @@ export default async function AlertsCenter({ projectId, locale }: Props) {
                   <time className="shrink-0 text-sm text-zinc-400">
                     {alert.detected_at
                       ? new Date(alert.detected_at).toLocaleString(
-                          ar ? "ar-SA" : "en-US"
+                          ar ? "ar-SA" : "en-US",
                         )
                       : ""}
                   </time>
@@ -163,8 +168,8 @@ export default async function AlertsCenter({ projectId, locale }: Props) {
                         ? "تم إرسال إشعار بالبريد"
                         : "Email notification sent"
                       : ar
-                      ? "لم يتم تسجيل إرسال بريد"
-                      : "No email send recorded"}
+                        ? "لم يتم تسجيل إرسال بريد"
+                        : "No email send recorded"}
                   </span>
 
                   {url && (

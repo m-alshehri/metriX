@@ -1,2 +1,58 @@
-import Link from "next/link";import {notFound} from "next/navigation";import {getDictionary,isLocale} from "@/lib/i18n";import {signUp} from "../auth/actions";
-export default function SignupPage({params}:{params:{locale:string}}){if(!isLocale(params.locale))notFound();const locale=params.locale,t=getDictionary(locale),other=locale==="en"?"ar":"en";return <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-6"><div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-soft"><div className="flex justify-between"><Link href={`/${locale}`} className="text-3xl text-metrix-900">metriX</Link><Link href={`/${other}/signup`} className="rounded-full border px-3 py-2 text-base ">{locale==="en"?"العربية":"English"}</Link></div><h1 className="mt-8 text-4xl ">{t.auth.signupTitle}</h1><form action={signUp} className="mt-7 space-y-4"><input type="hidden" name="locale" value={locale}/><input name="name" required className="w-full rounded-2xl border px-4 py-3" placeholder={t.auth.name}/><input name="email" type="email" required className="w-full rounded-2xl border px-4 py-3" placeholder={t.auth.email}/><input name="password" type="password" required minLength={6} className="w-full rounded-2xl border px-4 py-3" placeholder={t.auth.password}/><button className="w-full rounded-2xl bg-metrix-900 px-4 py-3 text-white">{t.auth.signupButton}</button></form></div></main>}
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { getDictionary, isLocale } from "@/lib/i18n";
+import { signUp } from "../auth/actions";
+export default async function SignupPage(props: {
+  params: Promise<{ locale: string }>;
+}) {
+  const params = await props.params;
+  if (!isLocale(params.locale)) notFound();
+  const locale = params.locale,
+    t = getDictionary(locale),
+    other = locale === "en" ? "ar" : "en";
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-6">
+      <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-soft">
+        <div className="flex justify-between">
+          <Link href={`/${locale}`} className="text-3xl text-metrix-900">
+            metriX
+          </Link>
+          <Link
+            href={`/${other}/signup`}
+            className="rounded-full border px-3 py-2 text-base "
+          >
+            {locale === "en" ? "العربية" : "English"}
+          </Link>
+        </div>
+        <h1 className="mt-8 text-4xl ">{t.auth.signupTitle}</h1>
+        <form action={signUp} className="mt-7 space-y-4">
+          <input type="hidden" name="locale" value={locale} />
+          <input
+            name="name"
+            required
+            className="w-full rounded-2xl border px-4 py-3"
+            placeholder={t.auth.name}
+          />
+          <input
+            name="email"
+            type="email"
+            required
+            className="w-full rounded-2xl border px-4 py-3"
+            placeholder={t.auth.email}
+          />
+          <input
+            name="password"
+            type="password"
+            required
+            minLength={6}
+            className="w-full rounded-2xl border px-4 py-3"
+            placeholder={t.auth.password}
+          />
+          <button className="w-full rounded-2xl bg-metrix-900 px-4 py-3 text-white">
+            {t.auth.signupButton}
+          </button>
+        </form>
+      </div>
+    </main>
+  );
+}
