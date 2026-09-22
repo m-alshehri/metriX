@@ -1,0 +1,4 @@
+-- Receipt for the atomic production rollout on 2026-09-22.
+-- The remote transaction executed migrations 202609210001 through
+-- 20260921025034 and recorded their original versions only after execution.
+-- Fresh installations already execute those files in order; no SQL is repeated here.

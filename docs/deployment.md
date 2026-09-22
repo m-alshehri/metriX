@@ -1,10 +1,14 @@
 # Deployment and database preflight
 
-The app rollout and full migration set have not been applied to production. On 2026-09-21, only `20260921025058_retention_rpc_access.sql` was applied to the connected meriX project. Verification confirmed that anon/authenticated cannot execute retention and service_role still can; the two function-access security advisories disappeared. No data was deleted.
+## Production rollout: 2026-09-22
 
-The live schema inspection found a three-value sentiment constraint and a global `(platform, external_id)` unique index. `20260921025034_legacy_schema_compatibility.sql` expands sentiment to five values and replaces global uniqueness with project-scoped uniqueness; it remains pending. A read-only duplicate check found zero duplicate `(project_id, external_id)` groups at inspection time. The regression suite covers this legacy upgrade.
+The pending migrations were applied atomically to meriX (jedwhinrjwyrzcegnanr), with original migration versions recorded in the same transaction. The coordinated_production_rollout receipt matches remote version 20260922143817. The user explicitly waived a backup and deferred staging. The transaction preserved all 8 projects and 850 mentions. Privileged retention remains denied to anon/authenticated and allowed to service_role. Source writes are server-only, and five-value sentiment/project-scoped identity constraints are installed.
 
-The remote migration history contains the isolated retention hotfix. Before applying older pending migrations, reconcile the migration list and use the CLI's documented pending-history workflow; do not mark the older migrations as applied without executing them. Review and test the complete upgrade in staging before production rollout.
+PR #1 merged at 6134c93737e08486c21e2cf7b116b1b5737ff496. Vercel production deployment dpl_3Szwz3RPUASdvEVpVYcBdEEvAVbv reached Ready. Canonical APP_URL, DEMO_TO_EMAIL and OPENAI_MODEL are configured. Tajawal is bundled locally.
+
+Local checks: 27 tests, TypeScript and production build passed; replaying the extracted live schema passed all migrations and 10 database tests. GitHub Verify run 35719728145 passed. Real authenticated user flows and OpenAI have not yet been verified. The request_quotas no-policy advisory is intentional (service-only); leaked password protection remains disabled.
+
+The following checklist applies to future rollouts; it is not a claim that all acceptance flows have been tested.
 
 ## Existing database
 
