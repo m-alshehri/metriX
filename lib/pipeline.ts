@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { checked } from "@/lib/db-result";
+import { BrightDataBudgetPausedError } from "@/lib/brightdata-budget";
 import { collectFromEnsembleData } from "@/lib/ensembledata";
 import {
   collectFacebook,
@@ -30,6 +31,7 @@ type State = {
   analyzed?: number;
   alerts?: number;
   pending?: number;
+  paused?: number;
   batches?: number;
   runId?: string;
 };
@@ -89,11 +91,11 @@ async function collect(db: DB, j: PipelineJob, a: any) {
     const result = snapshotId
       ? await resumeBrightDataSnapshot(snapshotId, p, a.handle)
       : p === "facebook"
-        ? await collectFacebook(a.handle)
+        ? await collectFacebook(a.handle, a.id)
         : p === "linkedin"
-          ? await collectLinkedIn(a.handle)
+          ? await collectLinkedIn(a.handle, a.id)
           : p === "google_maps"
-            ? await collectGoogleMapsReviews(a.handle)
+            ? await collectGoogleMapsReviews(a.handle, a.id)
             : await collectFromEnsembleData(a);
     const rows = (result.mentions || []).map((m: any) => {
       const content = recoverContent(m.raw_data, String(m.content || "")).slice(
@@ -254,6 +256,19 @@ async function collect(db: DB, j: PipelineJob, a: any) {
     await recordUsage(db, j, "provider_records", unique.length, source);
     return { count: unique.length, pending: false };
   } catch (error) {
+    if (error instanceof BrightDataBudgetPausedError) {
+      checked(
+        await db
+          .from("social_accounts")
+          .update({
+            last_sync_status: "paused",
+            last_sync_error: error.message,
+            provider: source,
+          })
+          .eq("id", a.id),
+      );
+      return { count: 0, pending: false, paused: true };
+    }
     if (isBrightDataPending(error)) {
       checked(
         await db.from("provider_jobs").upsert(
@@ -696,6 +711,7 @@ export async function executeStage(
         const r = await collect(db, j, live);
         state.imported = (state.imported || 0) + r.count;
         state.pending = (state.pending || 0) + Number(r.pending);
+        state.paused = (state.paused || 0) + Number("paused" in r && r.paused);
       }
       state.account++;
     } else state.stage = "enrich";
@@ -740,7 +756,11 @@ export async function executeStage(
     await db
       .from("pipeline_runs")
       .update({
-        status: done ? (state.pending ? "partial" : "success") : "running",
+        status: done
+          ? state.pending || state.paused
+            ? "partial"
+            : "success"
+          : "running",
         imported: state.imported || 0,
         analyzed: state.analyzed || 0,
         alerts: state.alerts || 0,
@@ -749,6 +769,7 @@ export async function executeStage(
           mode: j.mode,
           stage: state.stage,
           pending: state.pending || 0,
+          paused: state.paused || 0,
           records_refreshed: state.imported || 0,
         },
       })
