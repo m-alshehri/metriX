@@ -84,7 +84,8 @@ function arraysDeep(value: any, out: any[][] = []): any[][] {
   if (!value || typeof value !== "object") return out;
 
   if (Array.isArray(value)) {
-    if (value.length && value.some((x) => x && typeof x === "object")) out.push(value);
+    if (value.length && value.some((x) => x && typeof x === "object"))
+      out.push(value);
     for (const item of value) arraysDeep(item, out);
   } else {
     for (const child of Object.values(value)) arraysDeep(child, out);
@@ -122,9 +123,16 @@ function chooseItems(payload: any) {
       const x = item?.node || item?.data || item;
       if (!x || typeof x !== "object") continue;
       if (x.id || x.pk || x.aweme_id || x.videoId || x.rest_id) points += 5;
-      if (x.caption || x.text || x.title || x.desc || x.full_text || x.selftext) points += 4;
-      if (x.like_count !== undefined || x.likes !== undefined || x.score !== undefined) points += 2;
-      if (x.created_at || x.taken_at || x.timestamp || x.created_utc) points += 2;
+      if (x.caption || x.text || x.title || x.desc || x.full_text || x.selftext)
+        points += 4;
+      if (
+        x.like_count !== undefined ||
+        x.likes !== undefined ||
+        x.score !== undefined
+      )
+        points += 2;
+      if (x.created_at || x.taken_at || x.timestamp || x.created_utc)
+        points += 2;
     }
     return points;
   }
@@ -152,7 +160,7 @@ function deepFind(obj: any, keys: string[]): any {
 
 async function ed(
   path: string,
-  params: Record<string, string | number | boolean | undefined>
+  params: Record<string, string | number | boolean | undefined>,
 ) {
   const token = process.env.ENSEMBLEDATA_TOKEN;
   if (!token) throw new Error("ENSEMBLEDATA_TOKEN is missing");
@@ -165,7 +173,10 @@ async function ed(
     }
   }
 
-  const response = await fetch(url.toString(), { cache: "no-store" });
+  const response = await fetch(url.toString(), {
+    cache: "no-store",
+    signal: AbortSignal.timeout(20000),
+  });
   const text = await response.text();
 
   let payload: any;
@@ -182,14 +193,13 @@ async function ed(
         payload?.message,
         payload?.error?.message,
         payload?.error,
-        `EnsembleData ${response.status}`
-      )
+        `EnsembleData ${response.status}`,
+      ),
     );
   }
 
   return payload;
 }
-
 
 function chooseInstagramPosts(payload: any) {
   const direct = [
@@ -232,7 +242,7 @@ function chooseInstagramPosts(payload: any) {
     .sort((a, b) => b.score - a.score);
 
   return (candidates[0]?.arr || []).map(
-    (item: any) => item?.media || item?.node || item
+    (item: any) => item?.media || item?.node || item,
   );
 }
 
@@ -247,10 +257,7 @@ async function resolveTwitterId(handle: string) {
   return String(id);
 }
 
-async function resolveInstagramId(
-  handle: string,
-  externalId?: string | null
-) {
+async function resolveInstagramId(handle: string, externalId?: string | null) {
   if (externalId && /^\d+$/.test(externalId)) return externalId;
 
   const username = cleanHandle(handle);
@@ -288,7 +295,9 @@ async function resolveThreadsId(handle: string) {
 
   const exact = candidates.find((item: any) => {
     const node = item?.node || item;
-    return cleanHandle(str(node?.username)).toLowerCase() === username.toLowerCase();
+    return (
+      cleanHandle(str(node?.username)).toLowerCase() === username.toLowerCase()
+    );
   });
 
   const selected = exact || candidates[0];
@@ -312,7 +321,7 @@ async function resolveYouTubeBrowseId(account: SocialAccount) {
 
   if (!key) {
     throw new Error(
-      "For YouTube, save a Channel ID or keep YOUTUBE_API_KEY for @handle resolution"
+      "For YouTube, save a Channel ID or keep YOUTUBE_API_KEY for @handle resolution",
     );
   }
 
@@ -321,7 +330,10 @@ async function resolveYouTubeBrowseId(account: SocialAccount) {
   url.searchParams.set("forHandle", handle);
   url.searchParams.set("key", key);
 
-  const response = await fetch(url.toString(), { cache: "no-store" });
+  const response = await fetch(url.toString(), {
+    cache: "no-store",
+    signal: AbortSignal.timeout(20000),
+  });
   const payload = await response.json();
 
   const id = payload?.items?.[0]?.id;
@@ -330,24 +342,16 @@ async function resolveYouTubeBrowseId(account: SocialAccount) {
   return String(id);
 }
 
-function normalizeTwitter(
-  item: any,
-  handle: string
-): NormalizedMention | null {
+function normalizeTwitter(item: any, handle: string): NormalizedMention | null {
   const legacy = item?.legacy || item?.tweet?.legacy || item;
 
-  const id = str(
-    item?.rest_id,
-    item?.id,
-    item?.tweet?.rest_id,
-    legacy?.id_str
-  );
+  const id = str(item?.rest_id, item?.id, item?.tweet?.rest_id, legacy?.id_str);
 
   const content = str(
     legacy?.full_text,
     legacy?.text,
     item?.text,
-    item?.content
+    item?.content,
   );
 
   if (!id || !content) return null;
@@ -367,39 +371,20 @@ function normalizeTwitter(
     author_username: username || null,
     content,
     post_url: username ? `https://x.com/${username}/status/${id}` : null,
-    published_at: iso(
-      legacy?.created_at,
-      item?.created_at,
-      item?.timestamp
-    ),
-    likes: num(
-      legacy?.favorite_count,
-      item?.like_count,
-      item?.likes
-    ),
-    shares: num(
-      legacy?.retweet_count,
-      item?.retweet_count,
-      item?.shares
-    ),
-    replies: num(
-      legacy?.reply_count,
-      item?.reply_count,
-      item?.replies
-    ),
+    published_at: iso(legacy?.created_at, item?.created_at, item?.timestamp),
+    likes: num(legacy?.favorite_count, item?.like_count, item?.likes),
+    shares: num(legacy?.retweet_count, item?.retweet_count, item?.shares),
+    replies: num(legacy?.reply_count, item?.reply_count, item?.replies),
     views: num(
       item?.views?.count,
       legacy?.views,
       item?.view_count,
-      item?.impressions
+      item?.impressions,
     ),
   };
 }
 
-function normalizeTikTok(
-  item: any,
-  handle: string
-): NormalizedMention | null {
+function normalizeTikTok(item: any, handle: string): NormalizedMention | null {
   const id = str(item?.aweme_id, item?.id, item?.video_id);
   if (!id) return null;
 
@@ -409,7 +394,7 @@ function normalizeTikTok(
     author?.unique_id,
     author?.uniqueId,
     author?.username,
-    handle
+    handle,
   );
 
   return {
@@ -422,38 +407,18 @@ function normalizeTikTok(
       "[TikTok video]",
     post_url:
       str(item?.share_url, item?.shareUrl) ||
-      (username
-        ? `https://www.tiktok.com/@${username}/video/${id}`
-        : null),
-    published_at: iso(
-      item?.create_time,
-      item?.createTime,
-      item?.timestamp
-    ),
-    likes: num(
-      stats?.digg_count,
-      stats?.like_count,
-      item?.like_count
-    ),
-    shares: num(
-      stats?.share_count,
-      item?.share_count
-    ),
-    replies: num(
-      stats?.comment_count,
-      item?.comment_count
-    ),
-    views: num(
-      stats?.play_count,
-      stats?.view_count,
-      item?.view_count
-    ),
+      (username ? `https://www.tiktok.com/@${username}/video/${id}` : null),
+    published_at: iso(item?.create_time, item?.createTime, item?.timestamp),
+    likes: num(stats?.digg_count, stats?.like_count, item?.like_count),
+    shares: num(stats?.share_count, item?.share_count),
+    replies: num(stats?.comment_count, item?.comment_count),
+    views: num(stats?.play_count, stats?.view_count, item?.view_count),
   };
 }
 
 function normalizeInstagram(
   item: any,
-  handle: string
+  handle: string,
 ): NormalizedMention | null {
   const id = str(item?.pk, item?.id, item?.media_id);
   const code = str(item?.code, item?.shortcode);
@@ -474,7 +439,7 @@ function normalizeInstagram(
         item?.caption_text,
         item?.caption,
         item?.text,
-        item?.title
+        item?.title,
       ) || "[Instagram post]",
     post_url: code
       ? `https://www.instagram.com/p/${code}/`
@@ -483,31 +448,16 @@ function normalizeInstagram(
       item?.taken_at,
       item?.taken_at_timestamp,
       item?.timestamp,
-      item?.created_at
+      item?.created_at,
     ),
     likes: num(item?.like_count, item?.likes),
-    shares: num(
-      item?.reshare_count,
-      item?.share_count,
-      item?.shares
-    ),
-    replies: num(
-      item?.comment_count,
-      item?.comments_count,
-      item?.replies
-    ),
-    views: num(
-      item?.play_count,
-      item?.view_count,
-      item?.video_view_count
-    ),
+    shares: num(item?.reshare_count, item?.share_count, item?.shares),
+    replies: num(item?.comment_count, item?.comments_count, item?.replies),
+    views: num(item?.play_count, item?.view_count, item?.video_view_count),
   };
 }
 
-function normalizeThreads(
-  item: any,
-  handle: string
-): NormalizedMention | null {
+function normalizeThreads(item: any, handle: string): NormalizedMention | null {
   const node = item?.node || item;
   const id = str(node?.pk, node?.id, node?.post_id);
 
@@ -516,7 +466,7 @@ function normalizeThreads(
     node?.text_post_app_info?.link_preview_attachment?.display_url,
     node?.text,
     node?.caption,
-    node?.description
+    node?.description,
   );
 
   if (!id) return null;
@@ -531,91 +481,43 @@ function normalizeThreads(
     author_username: username || null,
     content: content || "[Threads post]",
     post_url: str(node?.permalink, node?.url) || null,
-    published_at: iso(
-      node?.taken_at,
-      node?.timestamp,
-      node?.created_at
-    ),
+    published_at: iso(node?.taken_at, node?.timestamp, node?.created_at),
     likes: num(node?.like_count, node?.likes),
-    shares: num(
-      node?.repost_count,
-      node?.share_count,
-      node?.shares
-    ),
-    replies: num(
-      node?.reply_count,
-      node?.comment_count,
-      node?.replies
-    ),
-    views: num(
-      node?.view_count,
-      node?.views
-    ),
+    shares: num(node?.repost_count, node?.share_count, node?.shares),
+    replies: num(node?.reply_count, node?.comment_count, node?.replies),
+    views: num(node?.view_count, node?.views),
   };
 }
 
-function normalizeYouTube(
-  item: any,
-  handle: string
-): NormalizedMention | null {
+function normalizeYouTube(item: any, handle: string): NormalizedMention | null {
   const id = str(item?.videoId, item?.video_id, item?.id);
   if (!id) return null;
 
-  const title = str(
-    item?.title?.runs?.[0]?.text,
-    item?.title,
-    item?.headline
-  );
+  const title = str(item?.title?.runs?.[0]?.text, item?.title, item?.headline);
 
   const description = str(
     item?.description,
     item?.shortDescription,
-    item?.descriptionSnippet?.runs?.[0]?.text
+    item?.descriptionSnippet?.runs?.[0]?.text,
   );
 
   return {
     platform: "YouTube",
     external_id: `yt:${id}`,
-    author_name: str(
-      item?.channelTitle,
-      item?.author,
-      handle
-    ) || null,
+    author_name: str(item?.channelTitle, item?.author, handle) || null,
     author_username: handle || null,
     content:
-      [title, description].filter(Boolean).join("\n\n") ||
-      "[YouTube video]",
+      [title, description].filter(Boolean).join("\n\n") || "[YouTube video]",
     post_url: `https://www.youtube.com/watch?v=${id}`,
-    published_at: iso(
-      item?.publishedAt,
-      item?.publish_date,
-      item?.timestamp
-    ),
-    likes: num(
-      item?.likeCount,
-      item?.like_count,
-      item?.likes
-    ),
-    shares: num(
-      item?.share_count,
-      item?.shares
-    ),
-    replies: num(
-      item?.commentCount,
-      item?.comment_count,
-      item?.comments
-    ),
-    views: num(
-      item?.viewCount,
-      item?.view_count,
-      item?.views
-    ),
+    published_at: iso(item?.publishedAt, item?.publish_date, item?.timestamp),
+    likes: num(item?.likeCount, item?.like_count, item?.likes),
+    shares: num(item?.share_count, item?.shares),
+    replies: num(item?.commentCount, item?.comment_count, item?.comments),
+    views: num(item?.viewCount, item?.view_count, item?.views),
   };
 }
 
-function normalizeReddit(
-  item: any
-): NormalizedMention | null {
+function normalizeReddit(item: any): NormalizedMention | null {
   const x = item?.data && !item?.data?.posts ? item.data : item;
 
   const id = str(x?.id, x?.name);
@@ -631,9 +533,7 @@ function normalizeReddit(
     external_id: `reddit:${id}`,
     author_name: str(x?.author) || null,
     author_username: str(x?.author) || null,
-    content:
-      [title, body].filter(Boolean).join("\n\n") ||
-      "[Reddit post]",
+    content: [title, body].filter(Boolean).join("\n\n") || "[Reddit post]",
     post_url: permalink
       ? `https://www.reddit.com${permalink}`
       : str(x?.url) || null,
@@ -647,20 +547,15 @@ function normalizeReddit(
 
 function normalizeSnapchat(
   item: any,
-  handle: string
+  handle: string,
 ): NormalizedMention | null {
-  const id = str(
-    item?.id,
-    item?.snap_id,
-    item?.story_id,
-    item?.content_id
-  );
+  const id = str(item?.id, item?.snap_id, item?.story_id, item?.content_id);
 
   const content = str(
     item?.description,
     item?.title,
     item?.text,
-    item?.caption
+    item?.caption,
   );
 
   if (!id || !content) return null;
@@ -668,17 +563,11 @@ function normalizeSnapchat(
   return {
     platform: "Snapchat",
     external_id: `snap:${id}`,
-    author_name:
-      str(item?.display_name, item?.name, handle) || null,
+    author_name: str(item?.display_name, item?.name, handle) || null,
     author_username: handle || null,
     content,
-    post_url:
-      str(item?.url, item?.share_url, item?.permalink) || null,
-    published_at: iso(
-      item?.timestamp,
-      item?.created_at,
-      item?.create_time
-    ),
+    post_url: str(item?.url, item?.share_url, item?.permalink) || null,
+    published_at: iso(item?.timestamp, item?.created_at, item?.create_time),
     likes: num(item?.likes, item?.like_count),
     shares: num(item?.shares, item?.share_count),
     replies: num(item?.comments, item?.comment_count),
@@ -689,9 +578,7 @@ function normalizeSnapchat(
 function parseRedditTarget(value: string) {
   const raw = String(value || "").trim();
 
-  const userMatch = raw.match(
-    /(?:reddit\.com\/)?user\/([^/?#]+)/i
-  );
+  const userMatch = raw.match(/(?:reddit\.com\/)?user\/([^/?#]+)/i);
 
   if (userMatch?.[1]) {
     return {
@@ -700,9 +587,7 @@ function parseRedditTarget(value: string) {
     };
   }
 
-  const subredditMatch = raw.match(
-    /(?:reddit\.com\/)?r\/([^/?#]+)/i
-  );
+  const subredditMatch = raw.match(/(?:reddit\.com\/)?r\/([^/?#]+)/i);
 
   if (subredditMatch?.[1]) {
     return {
@@ -713,10 +598,7 @@ function parseRedditTarget(value: string) {
 
   return {
     type: "subreddit" as const,
-    value: raw
-      .replace(/^@/, "")
-      .replace(/^r\//i, "")
-      .replace(/\/.*$/, ""),
+    value: raw.replace(/^@/, "").replace(/^r\//i, "").replace(/\/.*$/, ""),
   };
 }
 
@@ -766,7 +648,8 @@ export async function collectFromEnsembleData(account: SocialAccount) {
       externalId,
       mentions: items
         .map((x) => attachRaw(normalizeTwitter(x, handle), x))
-        .filter(Boolean).slice(0, 100) as NormalizedMention[],
+        .filter(Boolean)
+        .slice(0, 100) as NormalizedMention[],
     };
   }
 
@@ -782,7 +665,8 @@ export async function collectFromEnsembleData(account: SocialAccount) {
       externalId,
       mentions: items
         .map((x) => attachRaw(normalizeTikTok(x, handle), x))
-        .filter(Boolean).slice(0, 100) as NormalizedMention[],
+        .filter(Boolean)
+        .slice(0, 100) as NormalizedMention[],
     };
   }
 
@@ -800,15 +684,13 @@ export async function collectFromEnsembleData(account: SocialAccount) {
       externalId,
       mentions: items
         .map((x) => attachRaw(normalizeThreads(x, handle), x))
-        .filter(Boolean).slice(0, 100) as NormalizedMention[],
+        .filter(Boolean)
+        .slice(0, 100) as NormalizedMention[],
     };
   }
 
   if (platform === "instagram") {
-    externalId = await resolveInstagramId(
-      handle,
-      externalId
-    );
+    externalId = await resolveInstagramId(handle, externalId);
 
     payload = await ed("/instagram/user/posts", {
       user_id: externalId,
@@ -824,7 +706,8 @@ export async function collectFromEnsembleData(account: SocialAccount) {
       externalId,
       mentions: items
         .map((x) => attachRaw(normalizeInstagram(x, handle), x))
-        .filter(Boolean).slice(0, 100) as NormalizedMention[],
+        .filter(Boolean)
+        .slice(0, 100) as NormalizedMention[],
     };
   }
 
@@ -842,7 +725,8 @@ export async function collectFromEnsembleData(account: SocialAccount) {
       externalId,
       mentions: items
         .map((x) => attachRaw(normalizeYouTube(x, handle), x))
-        .filter(Boolean).slice(0, 100) as NormalizedMention[],
+        .filter(Boolean)
+        .slice(0, 100) as NormalizedMention[],
     };
   }
 
@@ -850,9 +734,7 @@ export async function collectFromEnsembleData(account: SocialAccount) {
     const target = parseRedditTarget(account.handle);
 
     if (!target.value) {
-      throw new Error(
-        "Enter a Reddit subreddit (r/name) or user profile URL"
-      );
+      throw new Error("Enter a Reddit subreddit (r/name) or user profile URL");
     }
 
     if (target.type === "user") {
@@ -862,7 +744,8 @@ export async function collectFromEnsembleData(account: SocialAccount) {
         externalId: `user:${target.value}`,
         mentions: items
           .map((x) => attachRaw(normalizeReddit(x), x))
-          .filter(Boolean).slice(0, 100) as NormalizedMention[],
+          .filter(Boolean)
+          .slice(0, 100) as NormalizedMention[],
       };
     }
 
@@ -879,7 +762,8 @@ export async function collectFromEnsembleData(account: SocialAccount) {
       externalId: `subreddit:${target.value}`,
       mentions: items
         .map((x) => attachRaw(normalizeReddit(x), x))
-        .filter(Boolean).slice(0, 100) as NormalizedMention[],
+        .filter(Boolean)
+        .slice(0, 100) as NormalizedMention[],
     };
   }
 
@@ -894,11 +778,10 @@ export async function collectFromEnsembleData(account: SocialAccount) {
       externalId,
       mentions: items
         .map((x) => attachRaw(normalizeSnapchat(x, handle), x))
-        .filter(Boolean).slice(0, 100) as NormalizedMention[],
+        .filter(Boolean)
+        .slice(0, 100) as NormalizedMention[],
     };
   }
 
-  throw new Error(
-    `EnsembleData collector is not configured for ${platform}`
-  );
+  throw new Error(`EnsembleData collector is not configured for ${platform}`);
 }

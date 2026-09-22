@@ -1,3 +1,4 @@
+import { checked } from "@/lib/db-result";
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -5,23 +6,31 @@ import { getDictionary, isLocale } from "@/lib/i18n";
 import { signOut } from "../auth/actions";
 import ProjectCardManager from "@/components/ProjectCardManager";
 
-export default async function DashboardPage({ params }: { params: { locale: string } }) {
+export default async function DashboardPage(props: {
+  params: Promise<{ locale: string }>;
+}) {
+  const params = await props.params;
   if (!isLocale(params.locale)) notFound();
 
   const locale = params.locale;
   const ar = locale === "ar";
   const t = getDictionary(locale);
-  const supabase = createClient();
+  const supabase = await createClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) redirect(`/${locale}/login`);
 
-  const { data: projects } = await supabase
+  const result = await supabase
     .from("projects")
     .select("id,name,description,avatar_url,created_at")
+    .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
-  const displayName = (user.user_metadata?.name as string | undefined) || user.email || "User";
+  const projects = checked(result);
+  const displayName =
+    (user.user_metadata?.name as string | undefined) || user.email || "User";
 
   return (
     <main className="min-h-[70vh] bg-zinc-50">
@@ -35,12 +44,17 @@ export default async function DashboardPage({ params }: { params: { locale: stri
               {t.dashboard.welcome}, {displayName}
             </h1>
             <p className="mt-2 text-base text-zinc-500">
-              {ar ? "إدارة مشاريع الرصد والوصول إلى لوحات التحليل." : "Manage monitoring projects and open their intelligence dashboards."}
+              {ar
+                ? "إدارة مشاريع الرصد والوصول إلى لوحات التحليل."
+                : "Manage monitoring projects and open their intelligence dashboards."}
             </p>
           </div>
 
           <div className="flex gap-2">
-            <Link href={`/${locale}/projects/new`} className="rounded-full bg-[#330033] px-5 py-2.5 text-base text-white">
+            <Link
+              href={`/${locale}/projects/new`}
+              className="rounded-full bg-[#330033] px-5 py-2.5 text-base text-white"
+            >
               + {t.dashboard.newProject}
             </Link>
             <form action={signOut}>
@@ -62,13 +76,23 @@ export default async function DashboardPage({ params }: { params: { locale: stri
         {(projects || []).length === 0 ? (
           <div className="mt-6 rounded-[2rem] border border-dashed border-zinc-300 bg-white p-12 text-center">
             <div className="text-4xl">＋</div>
-            <h3 className="mt-3 ">{ar ? "أنشئ أول مشروع" : "Create your first project"}</h3>
-            <p className="mt-2 text-base text-zinc-500">{ar ? "ابدأ بإضافة الجهة أو العلامة التي تريد متابعتها." : "Add the organization or brand you want to monitor."}</p>
+            <h3 className="mt-3 ">
+              {ar ? "أنشئ أول مشروع" : "Create your first project"}
+            </h3>
+            <p className="mt-2 text-base text-zinc-500">
+              {ar
+                ? "ابدأ بإضافة الجهة أو العلامة التي تريد متابعتها."
+                : "Add the organization or brand you want to monitor."}
+            </p>
           </div>
         ) : (
           <div className="mt-6 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
             {(projects || []).map((p) => (
-              <ProjectCardManager key={p.id} project={p as any} locale={locale} />
+              <ProjectCardManager
+                key={p.id}
+                project={p as any}
+                locale={locale}
+              />
             ))}
           </div>
         )}

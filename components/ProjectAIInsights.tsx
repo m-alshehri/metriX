@@ -1,3 +1,4 @@
+import { checked } from "@/lib/db-result";
 import { createClient } from "@/lib/supabase/server";
 import { generateProjectInsights } from "@/app/[locale]/projects/ai-insights-actions";
 
@@ -52,7 +53,7 @@ export default async function ProjectAIInsights({
   };
 }) {
   const ar = locale === "ar";
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const {
     data: { user },
@@ -60,10 +61,10 @@ export default async function ProjectAIInsights({
 
   if (!user) return null;
 
-  const { data } = await supabase
+  const result = await supabase
     .from("project_insights")
     .select(
-      "id,executive_summary,top_topics,positive_drivers,negative_drivers,risks,opportunities,recommendations,mentions_analyzed,generated_at"
+      "id,executive_summary,top_topics,positive_drivers,negative_drivers,risks,opportunities,recommendations,mentions_analyzed,generated_at",
     )
     .eq("project_id", projectId)
     .eq("user_id", user.id)
@@ -71,7 +72,7 @@ export default async function ProjectAIInsights({
     .limit(1)
     .maybeSingle();
 
-  const insight = (data ?? null) as Insight | null;
+  const insight = (checked(result) ?? null) as Insight | null;
 
   const error = searchParams?.insighterror;
   const code = searchParams?.code;
@@ -82,34 +83,34 @@ export default async function ProjectAIInsights({
         ? "مفتاح OpenAI غير موجود في إعدادات Vercel."
         : "OPENAI_API_KEY is missing from Vercel."
       : error === "no-mentions"
-      ? ar
-        ? "لا توجد إشارات كافية لتحليلها حتى الآن."
-        : "There are no mentions available to analyze yet."
-      : error === "database"
-      ? ar
-        ? "حدث خطأ أثناء قراءة أو حفظ بيانات التحليل."
-        : "There was a database error while reading or saving insights."
-      : error === "openai-401"
-      ? ar
-        ? "OpenAI رفض مفتاح API. تحقق من المفتاح في Vercel."
-        : "OpenAI rejected the API key. Check the key in Vercel."
-      : error === "openai-429"
-      ? ar
-        ? `تم الوصول إلى حد OpenAI أو الرصيد المتاح${
-            code ? ` (${code})` : ""
-          }.`
-        : `OpenAI quota or rate limit reached${
-            code ? ` (${code})` : ""
-          }.`
-      : error === "openai-api"
-      ? ar
-        ? "تعذر إنشاء التحليل بسبب خطأ من OpenAI."
-        : "OpenAI returned an error while generating insights."
-      : error === "parse"
-      ? ar
-        ? "تم استلام استجابة غير متوقعة من OpenAI."
-        : "OpenAI returned an unexpected response."
-      : null;
+        ? ar
+          ? "لا توجد إشارات كافية لتحليلها حتى الآن."
+          : "There are no mentions available to analyze yet."
+        : error === "database"
+          ? ar
+            ? "حدث خطأ أثناء قراءة أو حفظ بيانات التحليل."
+            : "There was a database error while reading or saving insights."
+          : error === "openai-401"
+            ? ar
+              ? "OpenAI رفض مفتاح API. تحقق من المفتاح في Vercel."
+              : "OpenAI rejected the API key. Check the key in Vercel."
+            : error === "openai-429"
+              ? ar
+                ? `تم الوصول إلى حد OpenAI أو الرصيد المتاح${
+                    code ? ` (${code})` : ""
+                  }.`
+                : `OpenAI quota or rate limit reached${
+                    code ? ` (${code})` : ""
+                  }.`
+              : error === "openai-api"
+                ? ar
+                  ? "تعذر إنشاء التحليل بسبب خطأ من OpenAI."
+                  : "OpenAI returned an error while generating insights."
+                : error === "parse"
+                  ? ar
+                    ? "تم استلام استجابة غير متوقعة من OpenAI."
+                    : "OpenAI returned an unexpected response."
+                  : null;
 
   return (
     <section className="mt-10 rounded-[2.25rem] border border-metrix-100 bg-gradient-to-br from-white to-metrix-50/40 p-7 shadow-sm">
@@ -140,8 +141,8 @@ export default async function ProjectAIInsights({
                 ? "إعادة توليد التحليل"
                 : "Regenerate AI Insights"
               : ar
-              ? "إنشاء التحليل الذكي"
-              : "Generate AI Insights"}
+                ? "إنشاء التحليل الذكي"
+                : "Generate AI Insights"}
           </button>
         </form>
       </div>
@@ -201,11 +202,15 @@ export default async function ProjectAIInsights({
               items={insight.top_topics}
             />
             <InsightList
-              title={ar ? "محركات الانطباع الإيجابي" : "Positive sentiment drivers"}
+              title={
+                ar ? "محركات الانطباع الإيجابي" : "Positive sentiment drivers"
+              }
               items={insight.positive_drivers}
             />
             <InsightList
-              title={ar ? "محركات الانطباع السلبي" : "Negative sentiment drivers"}
+              title={
+                ar ? "محركات الانطباع السلبي" : "Negative sentiment drivers"
+              }
               items={insight.negative_drivers}
             />
             <InsightList

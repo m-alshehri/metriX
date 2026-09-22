@@ -48,10 +48,19 @@ export default function ProjectCardManager({
   }
 
   async function removeProject() {
-    if (!confirm(ar ? "هل أنت متأكد من حذف المشروع وجميع بياناته؟" : "Delete this project and all of its data?")) return;
+    if (
+      !confirm(
+        ar
+          ? "هل أنت متأكد من حذف المشروع وجميع بياناته؟"
+          : "Delete this project and all of its data?",
+      )
+    )
+      return;
     setBusy(true);
     try {
-      const r = await fetch(`/api/projects/${project.id}`, { method: "DELETE" });
+      const r = await fetch(`/api/projects/${project.id}`, {
+        method: "DELETE",
+      });
       const j = await r.json();
       if (!r.ok || !j.ok) throw new Error(j.error || "Delete failed");
       router.refresh();
@@ -102,7 +111,13 @@ export default function ProjectCardManager({
           )}
         </button>
 
-        <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={uploadAvatar} />
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="hidden"
+          onChange={uploadAvatar}
+        />
 
         <div className="min-w-0 flex-1">
           {editing ? (
@@ -113,26 +128,44 @@ export default function ProjectCardManager({
                 className="min-w-0 flex-1 rounded-xl border border-zinc-300 px-3 py-2 text-base "
                 autoFocus
               />
-              <button disabled={busy} onClick={rename} className="rounded-xl bg-[#330033] px-3 text-sm text-white">
+              <button
+                disabled={busy}
+                onClick={rename}
+                className="rounded-xl bg-[#330033] px-3 text-sm text-white"
+              >
                 {ar ? "حفظ" : "Save"}
               </button>
             </div>
           ) : (
             <h3 className="truncate text-xl text-[#330033]">{project.name}</h3>
           )}
-          <p className="mt-1 line-clamp-2 text-base leading-6 text-zinc-500">{project.description || (ar ? "مشروع رصد وتحليل" : "Monitoring & analytics project")}</p>
+          <p className="mt-1 line-clamp-2 text-base leading-6 text-zinc-500">
+            {project.description ||
+              (ar ? "مشروع رصد وتحليل" : "Monitoring & analytics project")}
+          </p>
         </div>
       </div>
 
       <div className="mt-5 flex items-center justify-between border-t border-zinc-100 pt-4">
-        <Link href={`/${locale}/projects/${project.id}`} className="text-base text-[#330033]">
+        <Link
+          href={`/${locale}/projects/${project.id}`}
+          className="text-base text-[#330033]"
+        >
           {ar ? "فتح اللوحة ←" : "Open dashboard →"}
         </Link>
         <div className="flex gap-1">
-          <button disabled={busy} onClick={() => setEditing((x) => !x)} className="rounded-full px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100">
+          <button
+            disabled={busy}
+            onClick={() => setEditing((x) => !x)}
+            className="rounded-full px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100"
+          >
             {ar ? "تعديل الاسم" : "Rename"}
           </button>
-          <button disabled={busy} onClick={removeProject} className="rounded-full px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">
+          <button
+            disabled={busy}
+            onClick={removeProject}
+            className="rounded-full px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
+          >
             {ar ? "حذف" : "Delete"}
           </button>
         </div>

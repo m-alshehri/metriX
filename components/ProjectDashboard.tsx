@@ -1,15 +1,83 @@
-"use client";
-import {useMemo,useState} from "react";
-import PlatformIcon from "@/components/PlatformIcon";
-type M={id?:string;platform?:string|null;sentiment?:string|null;published_at?:string|null;likes?:number|null;shares?:number|null;replies?:number|null;views?:number|null;author_name?:string|null;author_username?:string|null;content?:string|null;post_url?:string|null};
-const key=(p:any)=>String(p||"other").toLowerCase().replace(/\s+/g,"_");
-const stop=new Set("the a an and or but for to of in on at by from with without into onto over under between through during before after above below that this these those is are was were be been being it its as if then than so not no yes do does did have has had can could will would should may might must i me my we us our you your he him his she her they them their who whom whose which what where when why how https http www com post في من إلى الى على عن مع بين عند بعد قبل فوق تحت هذا هذه هذي ذلك تلك الذي التي الذين هو هي هم هن أنا انا نحن أنت انت أنتم انتم كان كانت يكون تكون و أو او ثم بل لكن لا ما لم لن إن ان أن كل أي اي".split(" "));
-function Donut({segments,center}:{segments:{label:string,value:number,color:string}[];center:string}){const total=Math.max(1,segments.reduce((s,x)=>s+x.value,0)),c=2*Math.PI*43;let off=0;return <svg viewBox="0 0 120 120" className="h-40 w-40"><circle cx="60" cy="60" r="43" fill="none" stroke="#f4f4f5" strokeWidth="15"/>{segments.map(s=>{const len=s.value/total*c,o=off;off+=len;return <circle key={s.label} cx="60" cy="60" r="43" fill="none" stroke={s.color} strokeWidth="15" strokeDasharray={`${len} ${c-len}`} strokeDashoffset={-o} transform="rotate(-90 60 60)"><title>{s.label}: {s.value}</title></circle>})}<text x="60" y="62" textAnchor="middle" className="fill-[#330033] text-[12px]">{center}</text></svg>}
-export default function ProjectDashboard({mentions,locale}:{mentions:M[];locale:string}){const ar=locale==="ar";const [metric,setMetric]=useState<"items"|"engagement"|"views">("items");const [topPlatform,setTopPlatform]=useState("all");const d=useMemo(()=>{const rows=mentions||[],pm=new Map<string,any>(),sent:any={very_positive:0,positive:0,neutral:0,negative:0,very_negative:0},days=new Map<string,number>(),terms=new Map<string,number>();for(const m of rows){const k=key(m.platform),x=pm.get(k)||{label:String(m.platform||"Other"),items:0,engagement:0,views:0};x.items++;x.engagement+=Number(m.likes||0)+Number(m.shares||0)+Number(m.replies||0);x.views+=Number(m.views||0);pm.set(k,x);if(m.sentiment&&sent[m.sentiment]!=null)sent[m.sentiment]++;if(m.published_at){const day=m.published_at.slice(0,10);days.set(day,(days.get(day)||0)+1)}for(const raw of String(m.content||"").toLowerCase().split(/[\s.,!?;:()[\]{}"'`~\/\\|<>+=*&^%$]+/)){const term=raw.trim();if(term.length>=3&&!stop.has(term)&&!/^\d+$/.test(term))terms.set(term,(terms.get(term)||0)+1)}}const platforms=Array.from(pm.entries()).sort((a,b)=>b[1].items-a[1].items),timeline=Array.from(days.entries()).sort((a,b)=>a[0].localeCompare(b[0])).slice(-24),topics=Array.from(terms.entries()).sort((a,b)=>b[1]-a[1]).slice(0,10),top=[...rows].map(m=>({...m,score:Number(m.likes||0)+Number(m.shares||0)+Number(m.replies||0)})).sort((a,b)=>b.score-a.score).slice(0,20);return{rows,platforms,sent,timeline,topics,top}},[mentions]);const maxMetric=Math.max(1,...d.platforms.map(([,v])=>Number(v[metric]||0))),maxDay=Math.max(1,...d.timeline.map(([,n])=>n));const seg=[{label:ar?"إيجابي جدًا":"Very positive",value:d.sent.very_positive,color:"#15803d"},{label:ar?"إيجابي":"Positive",value:d.sent.positive,color:"#22c55e"},{label:ar?"محايد":"Neutral",value:d.sent.neutral,color:"#a1a1aa"},{label:ar?"سلبي":"Negative",value:d.sent.negative,color:"#ef4444"},{label:ar?"سلبي جدًا":"Very negative",value:d.sent.very_negative,color:"#991b1b"}];const tp=Array.from(new Set(d.top.map(m=>String(m.platform||"Other")))),top=topPlatform==="all"?d.top.slice(0,5):d.top.filter(m=>String(m.platform||"Other")===topPlatform).slice(0,5);return <section><div className="grid gap-4 xl:grid-cols-12">
-<div className="rounded-[1.6rem] border bg-white p-5 shadow-sm xl:col-span-4"><h3>{ar?"حصة المنصات":"Platform share"}</h3><div className="mt-2 flex items-center gap-5"><Donut center={String(d.rows.length)} segments={d.platforms.slice(0,5).map(([,v],i)=>({label:v.label,value:v.items,color:["#330033","#6b456b","#998099","#c5b7c5","#e2dce2"][i]}))}/><div className="flex-1 space-y-3">{d.platforms.slice(0,5).map(([k,v])=><div key={k} className="flex justify-between"><PlatformIcon platform={k} size={18}/><span>{v.items}</span></div>)}</div></div></div>
-<div className="rounded-[1.6rem] border bg-white p-5 shadow-sm xl:col-span-4"><h3>{ar?"المشاعر":"Sentiment"}</h3><div className="mt-2 flex items-center gap-5"><Donut center={String(seg.reduce((s,x)=>s+x.value,0))} segments={seg}/><div className="flex-1 space-y-2 text-sm">{seg.map(x=><div key={x.label} className="flex justify-between"><span className="flex items-center gap-2"><i className="h-2.5 w-2.5 rounded-full" style={{background:x.color}}/>{x.label}</span><span>{x.value}</span></div>)}</div></div></div>
-<div className="rounded-[1.6rem] border bg-white p-5 shadow-sm xl:col-span-4"><h3>{ar?"نشاط آخر الفترات":"Recent activity"}</h3><div className="mt-5 flex h-48 items-end gap-1">{d.timeline.length?d.timeline.map(([day,n])=><div key={day} className="flex h-full min-w-0 flex-1 flex-col justify-end"><div className="flex flex-1 items-end"><div title={`${day}: ${n}`} className="w-full rounded-t bg-[#330033]/80" style={{height:`${Math.max(8,n/maxDay*100)}%`}}/></div><span className="mt-2 block truncate text-center text-[10px] text-zinc-400" title={day}>{day.slice(5)}</span></div>):<div className="m-auto text-zinc-400">{ar?"لا توجد بيانات":"No data"}</div>}</div></div>
-<div className="rounded-[1.6rem] border bg-white p-5 shadow-sm xl:col-span-7"><div className="flex justify-between gap-3"><h3>{ar?"مقارنة أداء المنصات":"Platform performance"}</h3><div className="flex rounded-full bg-zinc-100 p-1 text-sm">{(["items","engagement","views"] as const).map(x=><button key={x} onClick={()=>setMetric(x)} className={`rounded-full px-3 py-1.5 ${metric===x?"bg-white text-[#330033] shadow-sm":"text-zinc-500"}`}>{x}</button>)}</div></div><div className="mt-6 space-y-4">{d.platforms.map(([k,v])=>{const val=Number(v[metric]||0);return <div key={k} className="grid grid-cols-[28px_1fr_auto] items-center gap-3"><PlatformIcon platform={k} size={20}/><div className="h-2.5 overflow-hidden rounded-full bg-zinc-100"><div className="h-full rounded-full bg-[#330033]" style={{width:`${Math.max(2,val/maxMetric*100)}%`}}/></div><span>{val.toLocaleString()}</span></div>})}</div></div>
-<div className="rounded-[1.6rem] border bg-white p-5 shadow-sm xl:col-span-5"><h3>{ar?"إشارات الموضوعات":"Topic signals"}</h3><div className="mt-5 flex flex-wrap gap-2">{d.topics.map(([term,count],i)=><span key={term} className="rounded-full border bg-zinc-50 px-3 py-2 text-zinc-700" style={{fontSize:`${Math.max(11,16-i*.45)}px`}}>{term} <span className="text-zinc-400">{count}</span></span>)}</div></div>
-<div className="rounded-[1.6rem] border bg-white p-5 shadow-sm xl:col-span-12"><div className="flex flex-wrap items-center justify-between gap-3"><h3>{ar?"أعلى المحتوى تفاعلاً":"Top engaging content"}</h3><select value={topPlatform} onChange={e=>setTopPlatform(e.target.value)} className="rounded-full border bg-white px-3 py-2 text-sm"><option value="all">{ar?"كل المنصات":"All platforms"}</option>{tp.map(p=><option key={p} value={p}>{p}</option>)}</select></div><div className="mt-3 divide-y">{top.map((m,i)=><div key={m.id||i} className="grid gap-3 py-4 md:grid-cols-[40px_1fr_auto] md:items-center"><PlatformIcon platform={key(m.platform)} size={19}/><div><p className="line-clamp-1 text-base text-zinc-800">{m.content||"—"}</p><p className="mt-1 text-sm text-zinc-400">{m.author_name||m.author_username||"—"}</p></div><div className="text-base text-[#330033]">{m.score.toLocaleString()}</div></div>)}</div></div>
-</div></section>}
+import { sentiments } from "@/lib/sentiment";
+type Summary = {
+  platforms: {
+    platform: string;
+    items: number;
+    engagement: number;
+    views: number;
+  }[];
+  sentiments: Record<string, number>;
+};
+export default function ProjectDashboard({
+  summary,
+  locale,
+}: {
+  summary: Summary;
+  locale: string;
+}) {
+  const ar = locale === "ar",
+    rows = summary.platforms || [];
+  const total = rows.reduce((n, p) => n + Number(p.items), 0);
+  const labels = ar
+    ? ["إيجابي جدًا", "إيجابي", "محايد", "سلبي", "سلبي جدًا"]
+    : ["Very positive", "Positive", "Neutral", "Negative", "Very negative"];
+  return (
+    <section className="space-y-5">
+      <div className="rounded-2xl border bg-white p-6">
+        <h2 className="text-xl">
+          {ar ? "إجمالي البيانات المرصودة" : "All monitored records"}
+        </h2>
+        <p className="mt-3 text-4xl">{total.toLocaleString()}</p>
+        <p className="mt-2 text-sm text-zinc-500">
+          {ar
+            ? "المؤشرات تشمل جميع السجلات الحقيقية المحفوظة. المشاهدات ليست وصولًا فريدًا."
+            : "Metrics include all stored non-test records. Views are not unique reach."}
+        </p>
+      </div>
+      <div className="overflow-x-auto rounded-2xl border bg-white p-6">
+        <table className="w-full text-start">
+          <caption className="mb-4 text-start text-xl">
+            {ar ? "أداء المنصات" : "Platform performance"}
+          </caption>
+          <thead>
+            <tr>
+              {(ar
+                ? ["المنصة", "السجلات", "التفاعل", "المشاهدات"]
+                : ["Platform", "Records", "Engagement", "Views"]
+              ).map((x) => (
+                <th className="p-2 text-start" key={x}>
+                  {x}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((p) => (
+              <tr className="border-t" key={p.platform}>
+                <th className="p-2 text-start" scope="row">
+                  {p.platform}
+                </th>
+                <td className="p-2">{Number(p.items).toLocaleString()}</td>
+                <td className="p-2">{Number(p.engagement).toLocaleString()}</td>
+                <td className="p-2">{Number(p.views).toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="rounded-2xl border bg-white p-6">
+        <h2 className="text-xl">
+          {ar ? "توزيع المشاعر" : "Sentiment distribution"}
+        </h2>
+        <dl className="mt-4 grid gap-3 sm:grid-cols-3">
+          {[...sentiments, "pending"].map((s, i) => (
+            <div key={s}>
+              <dt>{labels[i] || (ar ? "بانتظار التحليل" : "Pending")}</dt>
+              <dd>{Number(summary.sentiments?.[s] || 0).toLocaleString()}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </section>
+  );
+}

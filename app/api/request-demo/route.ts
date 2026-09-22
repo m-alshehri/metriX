@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const TO_EMAIL = "ma.alshehri@hotmail.com";
+import { createHash } from "node:crypto";
+import { createAdminClient } from "@/lib/supabase-admin";
+import { checked } from "@/lib/db-result";
 
 function clean(value: unknown, max = 1000) {
-  return String(value ?? "").trim().slice(0, max);
+  return String(value ?? "")
+    .trim()
+    .slice(0, max);
 }
 
 function esc(value: string) {
@@ -29,15 +33,52 @@ export async function POST(req: NextRequest) {
   const locale = clean(body.locale, 10) || "en";
 
   if (!name || !email || !company || !email.includes("@")) {
-    return NextResponse.json({ ok: false, error: "Missing required fields" }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: "Missing required fields" },
+      { status: 400 },
+    );
   }
 
+  const recipient = process.env.DEMO_TO_EMAIL;
+  if (!recipient)
+    return NextResponse.json(
+      { ok: false, error: "Email service is not configured" },
+      { status: 503 },
+    );
+  const ip =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  const key = createHash("sha256").update(`demo:${ip}`).digest("hex");
+  let allowed = false;
+  try {
+    allowed = checked(
+      await createAdminClient().rpc("metrix_take_quota", {
+        p_key: key,
+        p_max: 5,
+        p_seconds: 3600,
+      }),
+    );
+  } catch {
+    return NextResponse.json(
+      { ok: false, error: "Please try later" },
+      { status: 503 },
+    );
+  }
+  if (!allowed)
+    return NextResponse.json(
+      { ok: false, error: "Too many requests" },
+      { status: 429, headers: { "Retry-After": "3600" } },
+    );
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.ALERT_FROM_EMAIL;
 
   if (!apiKey || !from) {
-    console.error("Request demo email is not configured: RESEND_API_KEY / ALERT_FROM_EMAIL missing.");
-    return NextResponse.json({ ok: false, error: "Email service is not configured" }, { status: 500 });
+    console.error(
+      "Request demo email is not configured: RESEND_API_KEY / ALERT_FROM_EMAIL missing.",
+    );
+    return NextResponse.json(
+      { ok: false, error: "Email service is not configured" },
+      { status: 500 },
+    );
   }
 
   const html = `
@@ -58,13 +99,14 @@ export async function POST(req: NextRequest) {
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
+    signal: AbortSignal.timeout(15000),
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
       from,
-      to: [TO_EMAIL],
+      to: [recipient],
       reply_to: email,
       subject: `metriX demo request — ${company}`,
       html,
@@ -73,7 +115,10 @@ export async function POST(req: NextRequest) {
 
   if (!res.ok) {
     console.error("Resend demo request failed:", await res.text());
-    return NextResponse.json({ ok: false, error: "Email delivery failed" }, { status: 502 });
+    return NextResponse.json(
+      { ok: false, error: "Email delivery failed" },
+      { status: 502 },
+    );
   }
 
   return NextResponse.json({ ok: true });
