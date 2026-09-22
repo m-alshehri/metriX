@@ -31,6 +31,40 @@ vi.mock("../lib/ai", async () => ({
   generate: mock.generate,
 }));
 import { executeStage } from "../lib/pipeline";
+it("advances past a paused Bright Data account without issuing a network request", async () => {
+  vi.stubEnv("BRIGHTDATA_API_TOKEN", "test-token");
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  const account = { id: "account", platform: "facebook", handle: "example" };
+  mock.responses.push(
+    { data: { id: "project" }, error: null },
+    { data: account, error: null },
+    { data: null, error: null },
+    { data: null, error: null },
+    { data: null, error: null },
+    { data: null, error: null },
+  );
+  try {
+    const result = await executeStage({
+      ...job,
+      mode: "collect",
+      state: {
+        stage: "collect",
+        account: 0,
+        accounts: [account],
+        runId: "job",
+      },
+    });
+    expect(result.state.account).toBe(1);
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(mock.calls.some((x) => x.table === "brightdata_test_budget")).toBe(
+      true,
+    );
+  } finally {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  }
+});
 const job = {
   id: "job",
   project_id: "project",

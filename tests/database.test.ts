@@ -22,6 +22,43 @@ beforeAll(async () => {
  insert into public.mentions(project_id,user_id,platform,external_id,content,published_at,likes) values('${pa}','${a}','X','one','hello','2026-09-20',10),('${pb}','${b}','X','two','private','2026-09-20',20);`);
 });
 afterAll(() => db?.close());
+it("keeps Bright Data disabled and reserves each enabled test exactly once", async () => {
+  expect(
+    (
+      await db.query(
+        "select count(*)::int n from brightdata_test_budget where enabled",
+      )
+    ).rows,
+  ).toEqual([{ n: 0 }]);
+  const account = "33333333-3333-4333-8333-333333333333";
+  await db.exec(`insert into social_accounts(id,project_id,user_id,platform,handle) values('${account}','${pa}','${a}','facebook','example');
+    update brightdata_test_budget set social_account_id='${account}',enabled=true where platform='facebook';`);
+  const claim = `update brightdata_test_budget set enabled=false,reserved_at=now()
+    where platform='facebook' and social_account_id='${account}' and enabled and reserved_at is null returning max_records`;
+  const results = await Promise.all([db.query(claim), db.query(claim)]);
+  expect(results.flatMap((x) => x.rows)).toEqual([{ max_records: 1 }]);
+  await expect(
+    db.exec(
+      "update brightdata_test_budget set enabled=true where platform='facebook'",
+    ),
+  ).rejects.toThrow();
+  await expect(
+    db.exec(
+      "update brightdata_test_budget set max_records=100 where platform='google_maps'",
+    ),
+  ).rejects.toThrow();
+  await db.exec("set role authenticated");
+  try {
+    await expect(
+      db.query("select * from brightdata_test_budget"),
+    ).rejects.toThrow(/permission denied/);
+    await expect(
+      db.exec("update brightdata_test_budget set reserved_at=null"),
+    ).rejects.toThrow(/permission denied/);
+  } finally {
+    await db.exec("reset role");
+  }
+});
 it("creates all migrations on a clean PostgreSQL instance", async () =>
   expect((await db.query("select count(*)::int n from projects")).rows).toEqual(
     [{ n: 2 }],

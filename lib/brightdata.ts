@@ -1,4 +1,5 @@
 import "server-only";
+import { reserveBrightDataTest } from "@/lib/brightdata-budget";
 
 export type BrightMention = {
   platform: string;
@@ -264,13 +265,38 @@ async function getSnapshot(token: string, snapshotId: string) {
   throw new BrightDataPendingError(snapshotId);
 }
 
-async function scrape(datasetId: string, input: Record<string, any>[]) {
+async function scrape(
+  datasetId: string,
+  input: Record<string, any>[],
+  accountId: string,
+) {
   const token = process.env.BRIGHTDATA_API_TOKEN;
   if (!token) throw new Error("BRIGHTDATA_API_TOKEN is missing");
 
-  const url = new URL(`${API}/scrape`);
+  if (input.length !== 1)
+    throw new Error("Bright Data tests require exactly one input");
+  const platform =
+    datasetId === DATASETS.googleMaps
+      ? "google_maps"
+      : datasetId === DATASETS.facebook
+        ? "facebook"
+        : "linkedin";
+  await reserveBrightDataTest(platform, accountId);
+
+  // Trigger asynchronously so a long-running scrape does not require a second
+  // paid submission after our HTTP timeout. Limits are applied at the provider.
+  const url = new URL(`${API}/trigger`);
   url.searchParams.set("dataset_id", datasetId);
   url.searchParams.set("include_errors", "true");
+  url.searchParams.set("limit_per_input", "1");
+  url.searchParams.set("limit_multiple_results", "1");
+  if (datasetId === DATASETS.linkedin) {
+    url.searchParams.set("type", "discover_new");
+    url.searchParams.set(
+      "discover_by",
+      input[0].url.includes("/company/") ? "company_url" : "profile_url",
+    );
+  }
 
   const response = await fetch(url.toString(), {
     method: "POST",
@@ -278,7 +304,7 @@ async function scrape(datasetId: string, input: Record<string, any>[]) {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ input, limit_per_input: 100 }),
+    body: JSON.stringify({ input, limit_per_input: 1 }),
     cache: "no-store",
     signal: AbortSignal.timeout(20000),
   });
@@ -505,11 +531,13 @@ function googleMapsMentions(inputRows: any[], fallbackUrl: string) {
   return { rows, mentions };
 }
 
-export async function collectFacebook(target: string) {
+export async function collectFacebook(target: string, accountId: string) {
   const url = canonicalFacebook(target);
-  const collection = await scrape(DATASETS.facebook, [
-    { url, num_of_posts: 100 },
-  ]);
+  const collection = await scrape(
+    DATASETS.facebook,
+    [{ url, num_of_posts: 1 }],
+    accountId,
+  );
   const parsed = fbMentions(collection.rows);
   return {
     externalId: null,
@@ -525,9 +553,9 @@ export async function collectFacebook(target: string) {
   };
 }
 
-export async function collectLinkedIn(target: string) {
+export async function collectLinkedIn(target: string, accountId: string) {
   const url = canonicalLinkedIn(target);
-  const collection = await scrape(DATASETS.linkedin, [{ url }]);
+  const collection = await scrape(DATASETS.linkedin, [{ url }], accountId);
   const parsed = linkedInMentions(collection.rows);
   return {
     externalId: null,
@@ -543,11 +571,14 @@ export async function collectLinkedIn(target: string) {
   };
 }
 
-export async function collectGoogleMapsReviews(target: string) {
+export async function collectGoogleMapsReviews(
+  target: string,
+  accountId: string,
+) {
   const url = String(target || "").trim();
   if (!/^https?:\/\//i.test(url))
     throw new Error("Google Maps requires a full public Google Maps place URL");
-  const collection = await scrape(DATASETS.googleMaps, [{ url }]);
+  const collection = await scrape(DATASETS.googleMaps, [{ url }], accountId);
   const parsed = googleMapsMentions(collection.rows, url);
   return {
     externalId: null,
