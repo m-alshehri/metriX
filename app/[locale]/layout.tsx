@@ -1,12 +1,47 @@
-import { Tajawal } from "next/font/google";
+import localFont from "next/font/local";
 import { notFound } from "next/navigation";
 import { isLocale } from "@/lib/i18n";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
 
-const tajawal = Tajawal({
-  subsets: ["arabic"],
-  weight: ["200", "300", "400", "500", "700", "800", "900"],
+const tajawal = localFont({
+  src: [
+    {
+      path: "../fonts/tajawal/Tajawal-ExtraLight.ttf",
+      weight: "200",
+      style: "normal",
+    },
+    {
+      path: "../fonts/tajawal/Tajawal-Light.ttf",
+      weight: "300",
+      style: "normal",
+    },
+    {
+      path: "../fonts/tajawal/Tajawal-Regular.ttf",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../fonts/tajawal/Tajawal-Medium.ttf",
+      weight: "500",
+      style: "normal",
+    },
+    {
+      path: "../fonts/tajawal/Tajawal-Bold.ttf",
+      weight: "700",
+      style: "normal",
+    },
+    {
+      path: "../fonts/tajawal/Tajawal-ExtraBold.ttf",
+      weight: "800",
+      style: "normal",
+    },
+    {
+      path: "../fonts/tajawal/Tajawal-Black.ttf",
+      weight: "900",
+      style: "normal",
+    },
+  ],
   display: "swap",
 });
 
